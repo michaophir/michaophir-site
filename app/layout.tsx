@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Micha Ophir — Senior PM & Builder",
+  title: "Micha Ophir — Product Leader & Builder'",
   description:
     "Senior Product Manager with 15+ years across fintech, audio/media, and adtech. Exploring AI-native tools and building in public.",
 };
