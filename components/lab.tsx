@@ -28,7 +28,7 @@ export default function Lab() {
         {projects.map((project) => (
           <div
             key={project.title}
-            className="group rounded-xl border border-gray-200 p-6 transition hover:border-gray-300 hover:shadow-sm"
+            className="group rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
           >
             <div className="flex items-start justify-between">
               <h3 className="text-lg font-semibold">{project.title}</h3>
