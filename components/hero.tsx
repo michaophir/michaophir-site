@@ -6,9 +6,7 @@ export default function Hero() {
       </h1>
       <p className="mt-6 max-w-lg text-lg leading-relaxed text-gray-600">
         Product leader with 15+ years shipping at the intersection of audio
-        &amp; media{" "}
-        <span className="text-gray-400">(Spotify, TuneIn)</span>, adtech, and
-        fintech <span className="text-gray-400">(Bloomberg)</span>. Building
+        &amp; media, adtech, and fintech (Spotify, TuneIn, Bloomberg). Building
         AI-native tools and experimenting in public.
       </p>
       <div className="mt-8">
