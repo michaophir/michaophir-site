@@ -1,8 +1,8 @@
 const projects = [
   {
-    title: "Job Scraper",
+    title: "RoleScout",
     description:
-      "Agentic pipeline scraping 40+ companies, filtered by role, delivered via Telegram.",
+      "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
     status: "Active",
     link: "https://github.com/michaophir/sandbox",
   },
