@@ -1,2 +1,2 @@
 # michaophir-site
-Repo to manage michaophior.com
+Repo to manage michaophir.com
