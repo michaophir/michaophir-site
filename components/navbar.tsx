@@ -22,7 +22,7 @@ export default function Navbar() {
             AI-Run Company
           </a>
           <a
-            href="mailto:micha@michaophir.com?subject=Let's%20chat"
+            href="https://cal.com/michaophir/30min"
             className="rounded-full bg-gray-900 px-4 py-1.5 text-white transition hover:bg-gray-700"
           >
             Book 30 min
