@@ -35,13 +35,31 @@ const STAGE_SET = new Set<string>(STAGES);
 const EXIT_SET = new Set<string>(EXIT_STATES);
 
 const STAGE_COLOR = "#1e293b";
-const SOURCE_COLORS: Record<string, string> = {
+// Palette used to assign colors to sources at render time. A few well-known
+// sources are pinned to specific hues so repeat visits feel stable; unknown
+// sources cycle through the remaining palette in the order they're seen.
+const SOURCE_PALETTE = [
+  "#3b82f6", // blue
+  "#10b981", // green
+  "#f59e0b", // orange
+  "#8b5cf6", // purple
+  "#14b8a6", // teal
+  "#ec4899", // pink
+  "#eab308", // yellow
+  "#64748b", // gray
+  "#06b6d4", // cyan
+  "#f43f5e", // rose
+  "#84cc16", // lime
+  "#a855f7", // violet
+];
+const PINNED_SOURCE_COLORS: Record<string, string> = {
   LinkedIn: "#3b82f6",
   Referral: "#10b981",
   Direct: "#f59e0b",
   Scraper: "#8b5cf6",
+  Other: "#64748b",
 };
-const DEFAULT_SOURCE_COLOR = "#64748b";
+const OTHER_SOURCE = "Other";
 const EXIT_COLORS: Record<string, string> = {
   Rejected: "#b91c1c",
   Ghosted: "#6b7280",
@@ -53,8 +71,35 @@ const EXIT_COLORS: Record<string, string> = {
 
 type NodeKind = "source" | "stage" | "exit";
 
-function nodeColor(name: string, kind: NodeKind): string {
-  if (kind === "source") return SOURCE_COLORS[name] ?? DEFAULT_SOURCE_COLOR;
+function buildSourceColorMap(sourceNames: string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  // Reserve pinned colors so cycling doesn't collide with them.
+  const reserved = new Set(Object.values(PINNED_SOURCE_COLORS));
+  const cycle = SOURCE_PALETTE.filter((c) => !reserved.has(c));
+  let i = 0;
+  for (const name of sourceNames) {
+    if (PINNED_SOURCE_COLORS[name]) {
+      map.set(name, PINNED_SOURCE_COLORS[name]);
+      continue;
+    }
+    map.set(name, cycle[i % cycle.length]);
+    i += 1;
+  }
+  return map;
+}
+
+function nodeColor(
+  name: string,
+  kind: NodeKind,
+  sourceColors?: Map<string, string>
+): string {
+  if (kind === "source") {
+    return (
+      sourceColors?.get(name) ??
+      PINNED_SOURCE_COLORS[name] ??
+      PINNED_SOURCE_COLORS.Other
+    );
+  }
   if (kind === "exit") return EXIT_COLORS[name] ?? "#6b7280";
   return STAGE_COLOR;
 }
@@ -212,9 +257,18 @@ function aggregateJobs(rows: Row[]): {
       latestState = "Accepted";
     }
 
-    // Source from the first row.
-    const firstSource = sorted[0]?.source ?? "";
-    const sourceForFlow = firstSource || "Unknown";
+    // Source from the first row. Blank/missing sources fall into "Other".
+    // Also treats whitespace-only and common "no value" tokens as blank.
+    const rawFirstSource = (sorted[0]?.source ?? "").trim();
+    const normalizedFirst =
+      rawFirstSource === "" ||
+      rawFirstSource.toLowerCase() === "n/a" ||
+      rawFirstSource.toLowerCase() === "none" ||
+      rawFirstSource === "-"
+        ? OTHER_SOURCE
+        : rawFirstSource;
+    const firstSource = normalizedFirst;
+    const sourceForFlow = firstSource;
 
     // Next Action from the latest row that has a non-empty Next Action.
     let nextAction = "";
@@ -326,8 +380,8 @@ const SANKEY_NODE_WIDTH = 14;
 const SANKEY_NODE_PADDING = 14;
 const SANKEY_PAD_TOP = 36;
 const SANKEY_PAD_BOTTOM = 24;
-const SANKEY_PAD_LEFT = 78;
-const SANKEY_PAD_RIGHT = 130;
+const SANKEY_PAD_LEFT = 140;
+const SANKEY_PAD_RIGHT = 140;
 const SANKEY_TOTAL_COLUMNS = STAGES.length + 2; // sources + 8 stages + exits = 10
 const SANKEY_MIN_NODE_HEIGHT = 8;
 const SANKEY_MAX_NODE_HEIGHT_RATIO = 0.6;
@@ -465,8 +519,11 @@ function buildSankey(
     if (cap < stageScale) stageScale = cap;
   }
 
-  // 3) Source scale: cap so the tallest source <= Applied node height.
-  // Falls back to the tallest stage node if Applied has no value.
+  // 3) Source scale. Three constraints, smallest wins:
+  //    (a) tallest source <= Applied node height  (visual anchor)
+  //    (b) sourceScale <= stageScale              (flows never widen out)
+  //    (c) full source column fits in usableHeight after inter-node padding
+  //        (so tall columns don't push bottom sources off-screen)
   const appliedNode = nodesByName.get("Applied");
   let referenceHeight = 0;
   if (appliedNode && appliedNode.value > 0) {
@@ -474,23 +531,34 @@ function buildSankey(
   } else {
     referenceHeight = maxStageValue * stageScale;
   }
-  let maxSourceValue = 0;
-  for (const node of nodesByName.values()) {
-    if (node.kind === "source" && node.value > maxSourceValue) {
-      maxSourceValue = node.value;
-    }
-  }
+
+  const sourceNodes = nodesByColumn.get(0) ?? [];
+  const sourceCount = sourceNodes.length;
+  const sourceTotalValue = sourceNodes.reduce((s, n) => s + n.value, 0);
+  const maxSourceValue = sourceNodes.reduce(
+    (m, n) => (n.value > m ? n.value : m),
+    0
+  );
+
   let sourceScale = stageScale;
   if (maxSourceValue > 0 && referenceHeight > 0) {
     sourceScale = Math.min(stageScale, referenceHeight / maxSourceValue);
+  }
+  if (sourceCount > 0 && sourceTotalValue > 0) {
+    const sourcePadTotal = Math.max(0, sourceCount - 1) * SANKEY_NODE_PADDING;
+    const sourceAvailable = usableHeight - sourcePadTotal;
+    if (sourceAvailable > 0) {
+      const fitScale = sourceAvailable / sourceTotalValue;
+      sourceScale = Math.min(sourceScale, fitScale);
+    }
   }
 
   const scaleFor = (kind: NodeKind) =>
     kind === "source" ? sourceScale : stageScale;
 
   // Compute node heights.
-  //  - Sources: exactly value * sourceScale (never taller than their
-  //    outgoing flows; no min-height clamp).
+  //  - Sources: exactly value * sourceScale (no min clamp — labels render
+  //    to the left of the bar and don't depend on bar thickness).
   //  - Stages/Exits: value * scale, clamped to SANKEY_MIN_NODE_HEIGHT so
   //    zero-count nodes still render as a visible bar.
   for (const node of nodesByName.values()) {
@@ -723,6 +791,20 @@ export default function RoleScoutClient() {
     [transitions]
   );
 
+  // Dynamic source-color assignment based on the unique Source values in
+  // the current data, in the order they first appear in the flow list.
+  const sourceColorMap = useMemo(() => {
+    const seen: string[] = [];
+    if (graph) {
+      for (const node of graph.nodes) {
+        if (node.kind === "source" && !seen.includes(node.name)) {
+          seen.push(node.name);
+        }
+      }
+    }
+    return buildSourceColorMap(seen);
+  }, [graph]);
+
   // Total real applications for percentage calculation in tooltips.
   const totalApplications = useMemo(() => jobs.length, [jobs]);
 
@@ -845,7 +927,11 @@ export default function RoleScoutClient() {
                         // exit-tinted on the right half (Stage -> Exit).
                         const tintFromSource =
                           link.source.kind === "source"
-                            ? nodeColor(link.source.name, "source")
+                            ? nodeColor(
+                                link.source.name,
+                                "source",
+                                sourceColorMap
+                              )
                             : null;
                         const tintFromTarget =
                           link.target.kind === "exit"
@@ -854,7 +940,11 @@ export default function RoleScoutClient() {
                         const fill =
                           tintFromSource ??
                           tintFromTarget ??
-                          nodeColor(link.source.name, link.source.kind);
+                          nodeColor(
+                            link.source.name,
+                            link.source.kind,
+                            sourceColorMap
+                          );
                         return (
                           <path
                             key={i}
@@ -882,7 +972,11 @@ export default function RoleScoutClient() {
                     {/* Node rects + labels */}
                     <g>
                       {graph.nodes.map((node, i) => {
-                        const fill = nodeColor(node.name, node.kind);
+                        const fill = nodeColor(
+                          node.name,
+                          node.kind,
+                          sourceColorMap
+                        );
                         const isSource = node.kind === "source";
                         const isExit = node.kind === "exit";
                         const isStage = node.kind === "stage";
