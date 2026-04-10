@@ -7,17 +7,17 @@ const DEMO_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?output=csv";
 
 const STAGES = [
-  "Pre-Applied",
+  "Saved",
   "Applied",
   "Recruiter Screen",
   "Hiring Manager",
   "Interview Loop",
   "Final Round",
   "Offer",
-  "Accepted",
 ] as const;
 
 const EXIT_STATES = [
+  "Accepted",
   "No Response",
   "Rejected",
   "Ghosted",
@@ -50,7 +50,6 @@ type NodeKind = "source" | "stage" | "exit";
 function nodeColor(name: string, kind: NodeKind): string {
   if (kind === "source") return SOURCE_COLORS[name] ?? DEFAULT_SOURCE_COLOR;
   if (kind === "exit") return EXIT_COLORS[name] ?? "#6b7280";
-  if (name === "Accepted") return EXIT_COLORS.Accepted;
   return STAGE_COLOR;
 }
 
@@ -81,9 +80,10 @@ type Row = {
   role: string;
   person: string;
   date: string;
-  stage: string;
+  event: string;
   source: string;
-  status: string;
+  stage: string;
+  state: string;
   location: string;
   compensation: string;
   nextAction: string;
@@ -95,9 +95,9 @@ type AggregatedJob = {
   jobId: string;
   company: string;
   role: string;
-  currentStage: string;
-  status: string;
-  source: string;
+  currentStage: string; // highest stage reached
+  state: string; // latest state
+  source: string; // first row's source
   nextAction: string;
   nextActionDate: string;
   isExit: boolean;
@@ -108,15 +108,17 @@ type Mode = "demo" | "personal";
 
 function parseRow(raw: Record<string, unknown>): Row {
   const get = (key: string) => String(raw[key] ?? "").trim();
+  const normalizeStage = (v: string) => (v === "Pre-Applied" ? "Saved" : v);
   return {
     jobId: get("Job ID"),
     company: get("Company"),
     role: get("Role"),
     person: get("Person"),
     date: get("Date"),
-    stage: get("Stage/Event"),
+    event: get("Event"),
     source: get("Source"),
-    status: get("Status"),
+    stage: normalizeStage(get("Stage")),
+    state: get("State"),
     location: get("Location"),
     compensation: get("Compensation"),
     nextAction: get("Next Action"),
@@ -142,16 +144,18 @@ function aggregateJobs(rows: Row[]): {
   jobs: AggregatedJob[];
   transitions: Transition[];
 } {
-  // Snapshot model: one row per job. Each application contributes one
-  // edge from its Source -> current Stage, and (if status is an exit)
-  // an additional edge from Stage -> exit state.
-  const byJob = new Map<string, Row>();
+  // Event-stream model: many rows per Job ID. Group by Job ID, then derive
+  // a single AggregatedJob per group using:
+  //   - highest Stage reached (by STAGES order)
+  //   - latest State (by Date)
+  //   - Source from the first row
+  //   - Next Action from the latest row that has one
+  const byJob = new Map<string, Row[]>();
   for (const row of rows) {
     if (!row.jobId) continue;
-    const existing = byJob.get(row.jobId);
-    if (!existing || toTime(row.date) >= toTime(existing.date)) {
-      byJob.set(row.jobId, row);
-    }
+    const arr = byJob.get(row.jobId) ?? [];
+    arr.push(row);
+    byJob.set(row.jobId, arr);
   }
 
   const jobs: AggregatedJob[] = [];
@@ -169,31 +173,76 @@ function aggregateJobs(rows: Row[]): {
     if (!meta.has(key)) meta.set(key, { sourceKind, targetKind });
   };
 
-  for (const row of byJob.values()) {
-    const stage = row.stage;
-    const status = row.status;
-    const source = row.source || "Unknown";
+  for (const events of byJob.values()) {
+    // Chronological order (oldest first). Stable sort keeps original order
+    // for ties so "first row" semantics are predictable.
+    const sorted = [...events].sort(
+      (a, b) => toTime(a.date) - toTime(b.date)
+    );
 
-    if (STAGE_SET.has(stage)) {
-      bump(source, stage, "source", "stage");
-      if (EXIT_SET.has(status)) {
-        bump(stage, status, "stage", "exit");
+    // Highest Stage reached. "Accepted" is no longer a middle stage — it
+    // is a terminal state — so rows with stage=Accepted don't affect the
+    // stage index, but they flag the job as having accepted an offer.
+    let highestStageIdx = -1;
+    let highestStage = "";
+    let reachedAccepted = false;
+    for (const r of sorted) {
+      if (r.stage === "Accepted") {
+        reachedAccepted = true;
+        continue;
+      }
+      const idx = STAGES.indexOf(r.stage as (typeof STAGES)[number]);
+      if (idx > highestStageIdx) {
+        highestStageIdx = idx;
+        highestStage = r.stage;
       }
     }
 
-    const stageIdx = STAGES.indexOf(stage as (typeof STAGES)[number]);
-    const isExit = EXIT_SET.has(status);
-    const reachedApplied = stageIdx >= STAGES.indexOf("Applied");
+    // Latest state from the most recent row by date.
+    const latest = sorted[sorted.length - 1];
+    let latestState = latest?.state ?? "";
+    // If any row recorded Accepted (stage or state), override latestState.
+    if (reachedAccepted || latestState === "Accepted") {
+      latestState = "Accepted";
+    }
+
+    // Source from the first row.
+    const firstSource = sorted[0]?.source ?? "";
+    const sourceForFlow = firstSource || "Unknown";
+
+    // Next Action from the latest row that has a non-empty Next Action.
+    let nextAction = "";
+    let nextActionDate = "";
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].nextAction) {
+        nextAction = sorted[i].nextAction;
+        nextActionDate = sorted[i].nextActionDate;
+        break;
+      }
+    }
+
+    // Sankey flows on deduplicated data:
+    //   Source -> highest stage reached (always, if stage is known)
+    //   highest stage -> latest state (only if state is an exit)
+    if (STAGE_SET.has(highestStage)) {
+      bump(sourceForFlow, highestStage, "source", "stage");
+      if (EXIT_SET.has(latestState)) {
+        bump(highestStage, latestState, "stage", "exit");
+      }
+    }
+
+    const isExit = EXIT_SET.has(latestState);
+    const reachedApplied = highestStageIdx >= STAGES.indexOf("Applied");
 
     jobs.push({
-      jobId: row.jobId,
-      company: row.company,
-      role: row.role,
-      currentStage: stage,
-      status,
-      source: row.source,
-      nextAction: row.nextAction,
-      nextActionDate: row.nextActionDate,
+      jobId: latest.jobId,
+      company: latest.company,
+      role: latest.role,
+      currentStage: highestStage,
+      state: latestState,
+      source: firstSource,
+      nextAction,
+      nextActionDate,
       isExit,
       reachedApplied,
     });
@@ -216,15 +265,18 @@ function aggregateJobs(rows: Row[]): {
 }
 
 function computeStats(jobs: AggregatedJob[]) {
-  const total = jobs.filter((j) => j.reachedApplied).length;
-  const active = jobs.filter((j) => j.status === "Active").length;
+  // Total = unique Job IDs (jobs is already deduplicated).
+  const total = jobs.length;
+  const active = jobs.filter((j) => j.state === "Active").length;
   const responded = jobs.filter((j) => {
     const idx = STAGES.indexOf(j.currentStage as (typeof STAGES)[number]);
-    return j.reachedApplied && idx >= STAGES.indexOf("Recruiter Screen");
+    return idx >= STAGES.indexOf("Recruiter Screen");
   }).length;
+  // Offer rate: reached Offer as a stage OR ended in Accepted (which is
+  // now an exit state sitting past Offer in the funnel).
   const offers = jobs.filter((j) => {
     const idx = STAGES.indexOf(j.currentStage as (typeof STAGES)[number]);
-    return idx >= STAGES.indexOf("Offer");
+    return idx >= STAGES.indexOf("Offer") || j.state === "Accepted";
   }).length;
 
   return {
@@ -269,7 +321,7 @@ const SANKEY_NODE_PADDING = 14;
 const SANKEY_PAD_TOP = 36;
 const SANKEY_PAD_BOTTOM = 24;
 const SANKEY_PAD_LEFT = 78;
-const SANKEY_PAD_RIGHT = 88;
+const SANKEY_PAD_RIGHT = 130;
 const SANKEY_TOTAL_COLUMNS = STAGES.length + 2; // sources + 8 stages + exits = 10
 const SANKEY_MIN_NODE_HEIGHT = 8;
 const SANKEY_MAX_NODE_HEIGHT_RATIO = 0.6;
@@ -313,8 +365,9 @@ function buildSankey(
     return node;
   };
 
-  // Always create every stage node (even if it has zero apps).
+  // Always create every stage + exit state node (even if zero count).
   for (const stage of STAGES) ensureNode(stage, "stage");
+  for (const exit of EXIT_STATES) ensureNode(exit, "exit");
 
   // Build links from transitions, creating sources/exits on demand.
   const links: LayoutLink[] = [];
@@ -375,15 +428,22 @@ function buildSankey(
   const usableHeight = height - SANKEY_PAD_TOP - SANKEY_PAD_BOTTOM;
 
   // 1) Stage scale: smallest per-column scale across stage + exit columns.
+  //    We reserve SANKEY_MIN_NODE_HEIGHT for every zero-count node up front
+  //    (so pre-created empty exits don't overflow the flow area) and divide
+  //    the remaining space by the sum of *non-zero* values.
   let stageScale = Infinity;
   for (const [col, arr] of nodesByColumn) {
     if (col === 0) continue; // skip sources
-    const total = arr.reduce((s, n) => s + n.value, 0);
-    if (total <= 0) continue;
+    const nonZeroTotal = arr.reduce(
+      (s, n) => s + (n.value > 0 ? n.value : 0),
+      0
+    );
+    const zeroCount = arr.filter((n) => n.value <= 0).length;
+    const zeroSlack = zeroCount * SANKEY_MIN_NODE_HEIGHT;
     const padTotal = Math.max(0, arr.length - 1) * SANKEY_NODE_PADDING;
-    const available = usableHeight - padTotal;
-    if (available <= 0) continue;
-    const scale = available / total;
+    const available = usableHeight - padTotal - zeroSlack;
+    if (nonZeroTotal <= 0 || available <= 0) continue;
+    const scale = available / nonZeroTotal;
     if (scale < stageScale) stageScale = scale;
   }
   if (!Number.isFinite(stageScale) || stageScale <= 0) stageScale = 1;
@@ -422,20 +482,31 @@ function buildSankey(
   const scaleFor = (kind: NodeKind) =>
     kind === "source" ? sourceScale : stageScale;
 
-  // Compute node heights with a minimum so zero-count nodes are visible.
+  // Compute node heights.
+  //  - Sources: exactly value * sourceScale (never taller than their
+  //    outgoing flows; no min-height clamp).
+  //  - Stages/Exits: value * scale, clamped to SANKEY_MIN_NODE_HEIGHT so
+  //    zero-count nodes still render as a visible bar.
   for (const node of nodesByName.values()) {
-    node.height = Math.max(
-      SANKEY_MIN_NODE_HEIGHT,
-      node.value * scaleFor(node.kind)
-    );
+    const raw = node.value * scaleFor(node.kind);
+    node.height =
+      node.kind === "source" ? raw : Math.max(SANKEY_MIN_NODE_HEIGHT, raw);
   }
 
   // Stack nodes in each column, centered vertically within the usable area.
+  // Clamp the starting y so the column is always fully inside the flow area.
+  const flowTop = SANKEY_PAD_TOP;
+  const flowBottom = height - SANKEY_PAD_BOTTOM;
   for (const arr of nodesByColumn.values()) {
     const totalH =
       arr.reduce((s, n) => s + n.height, 0) +
       Math.max(0, arr.length - 1) * SANKEY_NODE_PADDING;
-    let y = SANKEY_PAD_TOP + Math.max(0, (usableHeight - totalH) / 2);
+    let y = flowTop + Math.max(0, (usableHeight - totalH) / 2);
+    // If the column would extend past the bottom, shift it up so it ends
+    // exactly at flowBottom. y is still clamped to flowTop minimum.
+    if (y + totalH > flowBottom) {
+      y = Math.max(flowTop, flowBottom - totalH);
+    }
     for (const node of arr) {
       node.y0 = y;
       node.y1 = y + node.height;
@@ -525,7 +596,7 @@ export default function RoleScoutClient() {
 
   // Filters
   const [stageFilter, setStageFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [stateFilter, setStateFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [nextActionFilter, setNextActionFilter] =
     useState<NextActionFilter>("all");
@@ -589,8 +660,8 @@ export default function RoleScoutClient() {
     () => Array.from(new Set(jobs.map((j) => j.source).filter(Boolean))).sort(),
     [jobs]
   );
-  const statuses = useMemo(
-    () => Array.from(new Set(jobs.map((j) => j.status).filter(Boolean))).sort(),
+  const states = useMemo(
+    () => Array.from(new Set(jobs.map((j) => j.state).filter(Boolean))).sort(),
     [jobs]
   );
   const stages = useMemo(
@@ -613,7 +684,7 @@ export default function RoleScoutClient() {
     now.setHours(0, 0, 0, 0);
     return jobs.filter((j) => {
       if (stageFilter !== "all" && j.currentStage !== stageFilter) return false;
-      if (statusFilter !== "all" && j.status !== statusFilter) return false;
+      if (stateFilter !== "all" && j.state !== stateFilter) return false;
       if (sourceFilter !== "all" && j.source !== sourceFilter) return false;
       if (nextActionFilter !== "all") {
         const d = parseDate(j.nextActionDate);
@@ -625,7 +696,7 @@ export default function RoleScoutClient() {
       }
       return true;
     });
-  }, [jobs, stageFilter, statusFilter, sourceFilter, nextActionFilter]);
+  }, [jobs, stageFilter, stateFilter, sourceFilter, nextActionFilter]);
 
   const sankeyWidth = 1280;
   const sankeyHeight = 520;
@@ -879,10 +950,10 @@ export default function RoleScoutClient() {
                 options={stages}
               />
               <FilterSelect
-                label="Status"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={statuses}
+                label="State"
+                value={stateFilter}
+                onChange={setStateFilter}
+                options={states}
               />
               <FilterSelect
                 label="Source"
@@ -914,7 +985,7 @@ export default function RoleScoutClient() {
                     <th className="pb-2 pr-2 font-medium">Company</th>
                     <th className="pb-2 pr-2 font-medium">Role</th>
                     <th className="pb-2 pr-2 font-medium">Stage</th>
-                    <th className="pb-2 pr-2 font-medium">Status</th>
+                    <th className="pb-2 pr-2 font-medium">State</th>
                     <th className="pb-2 pr-2 font-medium">Next Action</th>
                   </tr>
                 </thead>
@@ -945,13 +1016,13 @@ export default function RoleScoutClient() {
                         <td className="py-2 pr-2">{j.role}</td>
                         <td className="py-2 pr-2">{j.currentStage}</td>
                         <td className="py-2 pr-2">
-                          {j.status ? (
+                          {j.state ? (
                             <span
                               className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadgeClasses(
-                                j.status
+                                j.state
                               )}`}
                             >
-                              {j.status}
+                              {j.state}
                             </span>
                           ) : (
                             <span className="text-gray-300">—</span>
