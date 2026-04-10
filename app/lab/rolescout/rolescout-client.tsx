@@ -6,6 +6,12 @@ import Papa from "papaparse";
 const DEMO_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?output=csv";
 
+const SAMPLE_CSV = `Job ID,Company,Role,Person,Date,Event,Source,Stage,State,Compensation,Location,Next Action,Next Action Date,Notes
+JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-15,Applied,LinkedIn,Applied,Active,280000-320000,San Francisco CA,,,https://anthropic.com/careers/JOB-001
+JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-25,Recruiter Screen,LinkedIn,Recruiter Screen,Active,280000-320000,San Francisco CA,Prep for HM interview,2026-04-15,https://anthropic.com/careers/JOB-001
+JOB-002,Stripe,Principal PM Payments,N/A,2026-03-20,Applied,Direct,Applied,Rejected,250000-290000,Remote,,,https://stripe.com/jobs/JOB-002
+`;
+
 const STAGES = [
   "Saved",
   "Applied",
@@ -653,6 +659,18 @@ export default function RoleScoutClient() {
     });
   }
 
+  function handleDownloadSample() {
+    const blob = new Blob([SAMPLE_CSV], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "rolescout-sample.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const { jobs, transitions } = useMemo(() => aggregateJobs(rows), [rows]);
   const stats = useMemo(() => computeStats(jobs), [jobs]);
 
@@ -725,7 +743,14 @@ export default function RoleScoutClient() {
               Monitoring
             </span>
           </div>
-          <div>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleDownloadSample}
+              className="text-sm font-medium text-gray-500 underline decoration-gray-300 underline-offset-4 transition hover:text-slate-900 hover:decoration-slate-900"
+            >
+              Download sample CSV
+            </button>
             <input
               ref={fileInputRef}
               type="file"
