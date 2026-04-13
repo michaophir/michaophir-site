@@ -16,6 +16,14 @@ const projects: Project[] = [
     github: "https://github.com/michaophir/sandbox",
   },
   {
+    title: "RoleScout — Review",
+    description:
+      "Review open roles from your target companies — curated by best match, top paying, and newest.",
+    status: "Active",
+    href: "/lab/rolescout/review",
+    github: null,
+  },
+  {
     title: "michaophir.com",
     description: "This site — built by an AI agent team, in public.",
     status: "In Progress",

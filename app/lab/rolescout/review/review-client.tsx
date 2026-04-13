@@ -1,0 +1,712 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Papa from "papaparse";
+
+const CSV_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?gid=1874433807&single=true&output=csv";
+
+type Job = {
+  job_id: string;
+  company: string;
+  job_title: string;
+  location: string;
+  remote: string;
+  workplace_type: string;
+  department: string;
+  date_posted: string;
+  accepting_applications: string;
+  job_url: string;
+  last_seen: string;
+  description: string;
+  compensation_raw: string;
+  tier: number;
+};
+
+type WorkplacePill = "Remote" | "Hybrid" | "Onsite";
+type DatePill = "today" | "week";
+type Action = "save" | "pass";
+type Mode = "demo" | "personal";
+
+function parseRow(raw: Record<string, unknown>): Job {
+  const g = (k: string) => String(raw[k] ?? "").trim();
+  return {
+    job_id: g("job_id"),
+    company: g("company"),
+    job_title: g("job_title"),
+    location: g("location"),
+    remote: g("remote"),
+    workplace_type: g("workplace_type"),
+    department: g("department"),
+    date_posted: g("date_posted"),
+    accepting_applications: g("accepting_applications"),
+    job_url: g("job_url"),
+    last_seen: g("last_seen"),
+    description: g("description"),
+    compensation_raw: g("compensation_raw"),
+    tier: Number(g("tier")) || 999,
+  };
+}
+
+function parseCompMidpoint(comp: string): number {
+  const nums = comp.match(/[\d,]+/g);
+  if (!nums || nums.length === 0) return 0;
+  const parsed = nums.map((n) => Number(n.replace(/,/g, "")));
+  if (parsed.length >= 2) return (parsed[0] + parsed[1]) / 2;
+  return parsed[0];
+}
+
+function formatCompShort(comp: string): string {
+  const nums = comp.match(/[\d,]+/g);
+  if (!nums || nums.length === 0) return "—";
+  const parsed = nums.map((n) => Number(n.replace(/,/g, "")));
+  const fmt = (n: number) => {
+    if (n >= 1000) return `$${Math.round(n / 1000)}K`;
+    return `$${n}`;
+  };
+  if (parsed.length >= 2) return `${fmt(parsed[0])} - ${fmt(parsed[1])}`;
+  return fmt(parsed[0]);
+}
+
+function isWithinLastWeek(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return d >= weekAgo;
+}
+
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+}
+
+const WORKPLACE_PILLS: { value: WorkplacePill; label: string }[] = [
+  { value: "Remote", label: "Remote" },
+  { value: "Hybrid", label: "Hybrid" },
+  { value: "Onsite", label: "Onsite" },
+];
+const DATE_PILLS: { value: DatePill; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "This Week" },
+];
+
+// ---------- Components ----------
+
+function FilterBar({
+  activeWorkplace,
+  activeDates,
+  toggle,
+  clearAll,
+}: {
+  activeWorkplace: Set<WorkplacePill>;
+  activeDates: Set<DatePill>;
+  toggle: (pill: WorkplacePill | DatePill) => void;
+  clearAll: () => void;
+}) {
+  const noneActive = activeWorkplace.size === 0 && activeDates.size === 0;
+
+  const pill = (
+    label: string,
+    active: boolean,
+    onClick: () => void
+  ) => (
+    <button
+      key={label}
+      onClick={onClick}
+      className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+        active
+          ? "bg-slate-900 text-white"
+          : "bg-white text-gray-600 hover:bg-gray-100"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {pill("All", noneActive, clearAll)}
+      {WORKPLACE_PILLS.map((p) =>
+        pill(p.label, activeWorkplace.has(p.value), () => toggle(p.value))
+      )}
+      {DATE_PILLS.map((p) =>
+        pill(p.label, activeDates.has(p.value), () => toggle(p.value))
+      )}
+    </div>
+  );
+}
+
+function ActionButtons({
+  jobId,
+  actions,
+  onAction,
+}: {
+  jobId: string;
+  actions: Record<string, Action>;
+  onAction: (id: string, a: Action) => void;
+}) {
+  const current = actions[jobId];
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onAction(jobId, "save");
+        }}
+        className={`text-sm font-semibold transition ${
+          current === "save"
+            ? "text-emerald-600 scale-110"
+            : "text-emerald-500 opacity-60 hover:opacity-100"
+        }`}
+        title="Save"
+      >
+        ✓
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onAction(jobId, "pass");
+        }}
+        className={`text-sm font-semibold transition ${
+          current === "pass"
+            ? "text-red-500 scale-110"
+            : "text-red-400 opacity-60 hover:opacity-100"
+        }`}
+        title="Pass"
+      >
+        ✗
+      </button>
+    </div>
+  );
+}
+
+function JobCard({
+  job,
+  actions,
+  onAction,
+}: {
+  job: Job;
+  actions: Record<string, Action>;
+  onAction: (id: string, a: Action) => void;
+}) {
+  const state = actions[job.job_id];
+  const isSaved = state === "save";
+  const isPassed = state === "pass";
+
+  return (
+    <div
+      className={`flex flex-col justify-between rounded-xl border p-5 shadow-sm transition hover:shadow-md ${
+        isSaved
+          ? "border-emerald-300 bg-white"
+          : isPassed
+          ? "border-gray-200 bg-gray-50 opacity-50"
+          : "border-gray-100 bg-white"
+      }`}
+    >
+      <div>
+        <div className="mb-1 flex items-start justify-between">
+          <p className="text-xs font-medium text-gray-400">{job.company}</p>
+          <ActionButtons jobId={job.job_id} actions={actions} onAction={onAction} />
+        </div>
+        <h3 className="mb-2 text-[15px] font-semibold leading-snug text-slate-900">
+          {job.job_title}
+        </h3>
+        <p className="mb-4 line-clamp-2 text-sm leading-relaxed text-gray-500">
+          {job.description}
+        </p>
+      </div>
+      <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            {job.location || "—"}
+          </span>
+          <span className="flex items-center gap-1">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+            </svg>
+            {formatCompShort(job.compensation_raw)}
+          </span>
+        </div>
+        {job.job_url && (
+          <a
+            href={job.job_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-blue-600 hover:text-blue-700"
+          >
+            View&nbsp;↗
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-500">
+      {title}
+    </h2>
+  );
+}
+
+function CardGrid({
+  title,
+  jobs,
+  actions,
+  onAction,
+}: {
+  title: string;
+  jobs: Job[];
+  actions: Record<string, Action>;
+  onAction: (id: string, a: Action) => void;
+}) {
+  if (jobs.length === 0) return null;
+  return (
+    <section className="mb-10">
+      <SectionHeader title={title} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {jobs.map((job) => (
+          <JobCard key={job.job_id} job={job} actions={actions} onAction={onAction} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DescriptionTooltip({ text }: { text: string }) {
+  const cellRef = useRef<HTMLTableCellElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; placement: "above" | "below" } | null>(null);
+
+  const show = useCallback(() => {
+    const cell = cellRef.current;
+    const tip = tipRef.current;
+    if (!cell || !tip) return;
+    const cellRect = cell.getBoundingClientRect();
+    const tipW = 400;
+    // Position to the right of the description cell, aligned with its right edge
+    let left = cellRect.right - tipW;
+    // Keep within viewport
+    if (left < 8) left = 8;
+
+    // Prefer above; if not enough room, go below
+    const spaceAbove = cellRect.top;
+    const spaceBelow = window.innerHeight - cellRect.bottom;
+    tip.style.visibility = "hidden";
+    tip.style.display = "block";
+    const tipH = tip.offsetHeight;
+    tip.style.display = "";
+    tip.style.visibility = "";
+
+    if (spaceAbove >= tipH + 8) {
+      setPos({ top: cellRect.top - tipH - 6, left, placement: "above" });
+    } else if (spaceBelow >= tipH + 8) {
+      setPos({ top: cellRect.bottom + 6, left, placement: "below" });
+    } else {
+      // Fallback: above anyway
+      setPos({ top: cellRect.top - tipH - 6, left, placement: "above" });
+    }
+  }, []);
+
+  const hide = useCallback(() => setPos(null), []);
+
+  return (
+    <td
+      ref={cellRef}
+      className="px-5 py-3"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
+      <p className="line-clamp-2 cursor-default text-gray-500">{text}</p>
+      {text && pos && (
+        <div
+          ref={tipRef}
+          className="fixed z-[100] w-[400px] max-w-[90vw] rounded-lg bg-slate-900 px-4 py-3 text-sm leading-relaxed text-white shadow-xl"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {text}
+          <div
+            className={`absolute left-1/2 -translate-x-1/2 border-[6px] border-transparent ${
+              pos.placement === "above"
+                ? "top-full border-t-slate-900"
+                : "bottom-full border-b-slate-900"
+            }`}
+          />
+        </div>
+      )}
+      {/* Hidden measure element */}
+      {text && !pos && (
+        <div
+          ref={tipRef}
+          className="fixed invisible w-[400px] max-w-[90vw] rounded-lg bg-slate-900 px-4 py-3 text-sm leading-relaxed"
+          style={{ top: -9999, left: -9999 }}
+        >
+          {text}
+        </div>
+      )}
+    </td>
+  );
+}
+
+function ListingsTable({
+  jobs,
+  actions,
+  onAction,
+}: {
+  jobs: Job[];
+  actions: Record<string, Action>;
+  onAction: (id: string, a: Action) => void;
+}) {
+  if (jobs.length === 0) return null;
+  return (
+    <section>
+      <SectionHeader title="All Listings" />
+      <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-5 py-3">Company</th>
+              <th className="px-5 py-3">Role</th>
+              <th className="px-5 py-3">Comp Range</th>
+              <th className="px-5 py-3">Location</th>
+              <th className="whitespace-nowrap px-5 py-3">Job URL</th>
+              <th className="px-5 py-3 w-[280px]">Description</th>
+              <th className="px-5 py-3 w-[80px]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobs.map((job) => {
+              const rowState = actions[job.job_id];
+              return (
+              <tr
+                key={job.job_id}
+                className={`border-b border-gray-50 transition ${
+                  rowState === "save"
+                    ? "bg-emerald-50/40"
+                    : rowState === "pass"
+                    ? "opacity-40"
+                    : "hover:bg-gray-50/50"
+                }`}
+              >
+                <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-900">
+                  {job.company}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-slate-700">
+                  {job.job_title}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-gray-500">
+                  {formatCompShort(job.compensation_raw)}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3 text-gray-500">
+                  {job.location || "—"}
+                </td>
+                <td className="whitespace-nowrap px-5 py-3">
+                  {job.job_url ? (
+                    <a
+                      href={job.job_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      View&nbsp;↗
+                    </a>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <DescriptionTooltip text={job.description} />
+                <td className="px-5 py-3">
+                  <ActionButtons
+                    jobId={job.job_id}
+                    actions={actions}
+                    onAction={onAction}
+                  />
+                </td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function downloadSavedCsv(jobs: Job[], actions: Record<string, Action>) {
+  const saved = jobs.filter((j) => actions[j.job_id] === "save");
+  if (saved.length === 0) return;
+  const today = new Date().toISOString().split("T")[0];
+  const header = [
+    "Job ID", "Company", "Role", "Person", "Date", "Event", "Source",
+    "Stage", "State", "Compensation", "Location", "Next Action",
+    "Next Action Date", "Notes", "Job URL",
+  ];
+  const rows = saved.map((j) => [
+    j.job_id, j.company, j.job_title, "", today, "Saved", "Scraper",
+    "Saved", "Active", j.compensation_raw, j.location, "", "", "", j.job_url,
+  ]);
+  const csv = Papa.unparse({ fields: header, data: rows });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `rolescout-saved-${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Main ----------
+
+export default function ReviewClient() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("demo");
+  const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
+  const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
+  const [actions, setActions] = useState<Record<string, Action>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const savedCount = useMemo(
+    () => Object.values(actions).filter((a) => a === "save").length,
+    [actions]
+  );
+
+  useEffect(() => {
+    fetch(CSV_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch data");
+        return res.text();
+      })
+      .then((text) => {
+        const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+        const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+        setJobs(parsed.filter((j) => j.job_id));
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+      const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+      setJobs(parsed.filter((j) => j.job_id));
+      setMode("personal");
+      setActions({});
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const togglePill = (pill: WorkplacePill | DatePill) => {
+    if (pill === "Remote" || pill === "Hybrid" || pill === "Onsite") {
+      setActiveWorkplace((prev) => {
+        const next = new Set(prev);
+        if (next.has(pill)) next.delete(pill);
+        else next.add(pill);
+        return next;
+      });
+    } else {
+      setActiveDates((prev) => {
+        const next = new Set(prev);
+        if (next.has(pill)) next.delete(pill);
+        else next.add(pill);
+        return next;
+      });
+    }
+  };
+
+  const clearAll = () => {
+    setActiveWorkplace(new Set());
+    setActiveDates(new Set());
+  };
+
+  const handleAction = (id: string, action: Action) => {
+    setActions((prev) => {
+      const next = { ...prev };
+      if (next[id] === action) {
+        delete next[id];
+      } else {
+        next[id] = action;
+      }
+      return next;
+    });
+  };
+
+  const filtered = useMemo(() => {
+    return jobs.filter((j) => {
+      if (activeWorkplace.size > 0) {
+        const wt = j.workplace_type.toLowerCase();
+        const match =
+          (activeWorkplace.has("Remote") && wt === "remote") ||
+          (activeWorkplace.has("Hybrid") && wt === "hybrid") ||
+          (activeWorkplace.has("Onsite") && ["onsite", "on-site", "in-office"].includes(wt));
+        if (!match) return false;
+      }
+      if (activeDates.size > 0) {
+        const match =
+          (activeDates.has("today") && isToday(j.date_posted)) ||
+          (activeDates.has("week") && isWithinLastWeek(j.date_posted));
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [jobs, activeWorkplace, activeDates]);
+
+  const { bestMatch, topPaying, newThisWeek } = useMemo(() => {
+    const seen = new Set<string>();
+
+    const best = [...filtered]
+      .sort((a, b) => a.tier - b.tier)
+      .filter((j) => !seen.has(j.job_id))
+      .slice(0, 3);
+    best.forEach((j) => seen.add(j.job_id));
+
+    const top = [...filtered]
+      .sort(
+        (a, b) =>
+          parseCompMidpoint(b.compensation_raw) -
+          parseCompMidpoint(a.compensation_raw)
+      )
+      .filter((j) => !seen.has(j.job_id))
+      .slice(0, 3);
+    top.forEach((j) => seen.add(j.job_id));
+
+    const week = filtered
+      .filter((j) => isWithinLastWeek(j.date_posted) && !seen.has(j.job_id))
+      .slice(0, 3);
+
+    return { bestMatch: best, topPaying: top, newThisWeek: week };
+  }, [filtered]);
+
+  return (
+    <div className="min-h-screen bg-[#F5F5F7] text-slate-900">
+      {/* Header */}
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
+          <div className="flex items-center gap-4">
+            <a
+              href="/lab/rolescout"
+              className="text-sm font-medium text-gray-500 transition hover:text-slate-900"
+            >
+              &larr; Back
+            </a>
+            <h1 className="text-2xl font-bold tracking-tight">RoleScout</h1>
+            <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-medium text-white">
+              Review
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {savedCount > 0 && (
+              <button
+                onClick={() => downloadSavedCsv(jobs, actions)}
+                className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+              >
+                Download Saved ({savedCount})
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              Upload CSV
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* Demo banner */}
+        {mode === "demo" && (
+          <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span>
+              <strong>Viewing demo data</strong> — upload your own CSV to use
+              with your data
+            </span>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-xs font-medium text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-amber-900"
+            >
+              Refresh
+            </button>
+          </div>
+        )}
+
+        {/* Filter bar */}
+        <div className="mb-8">
+          <FilterBar
+            activeWorkplace={activeWorkplace}
+            activeDates={activeDates}
+            toggle={togglePill}
+            clearAll={clearAll}
+          />
+          {!loading && (
+            <p className="mt-3 text-sm text-gray-400">
+              Showing {filtered.length} opportunities matching your criteria
+            </p>
+          )}
+        </div>
+
+        {loading && (
+          <div className="flex items-center justify-center py-32">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-slate-900" />
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            Failed to load data: {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+            <CardGrid
+              title="Best Match"
+              jobs={bestMatch}
+              actions={actions}
+              onAction={handleAction}
+            />
+            <CardGrid
+              title="Top Paying"
+              jobs={topPaying}
+              actions={actions}
+              onAction={handleAction}
+            />
+            <CardGrid
+              title="New This Week"
+              jobs={newThisWeek}
+              actions={actions}
+              onAction={handleAction}
+            />
+            <ListingsTable
+              jobs={filtered}
+              actions={actions}
+              onAction={handleAction}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
