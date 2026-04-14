@@ -15,7 +15,7 @@ export default function Navbar() {
           Micha Ophir
         </a>
         <div className="flex items-center gap-6 text-sm font-medium text-gray-600">
-          <a href="#lab" className="transition hover:text-gray-900">
+          <a href="/lab" className="transition hover:text-gray-900">
             The Lab
           </a>
           <a href="#ai-run" className="transition hover:text-gray-900">

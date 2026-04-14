@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Navbar from "@/components/navbar";
 import ReviewClient from "./review-client";
 
 export const metadata: Metadata = {
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function ReviewPage() {
-  return <ReviewClient />;
+  return (
+    <>
+      <Navbar />
+      <ReviewClient />
+    </>
+  );
 }

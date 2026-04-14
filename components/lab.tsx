@@ -13,14 +13,6 @@ const projects: Project[] = [
       "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
     status: "Active",
     href: "/lab/rolescout",
-    github: "https://github.com/michaophir/sandbox",
-  },
-  {
-    title: "RoleScout — Review",
-    description:
-      "Review open roles from your target companies — curated by best match, top paying, and newest.",
-    status: "Active",
-    href: "/lab/rolescout/review",
     github: null,
   },
   {

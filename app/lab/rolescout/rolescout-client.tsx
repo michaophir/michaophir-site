@@ -815,7 +815,7 @@ export default function RoleScoutClient() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
           <div className="flex items-center gap-4">
             <a
-              href="/"
+              href="/lab/rolescout"
               className="text-sm font-medium text-gray-500 transition hover:text-slate-900"
             >
               &larr; Back
