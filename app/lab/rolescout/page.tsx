@@ -201,7 +201,7 @@ export default function RoleScoutDashboard() {
                 <div className="mb-5 flex items-start justify-between">
                   <h3 className="text-base font-semibold text-slate-900">Upcoming Actions</h3>
                   <a
-                    href="/lab/rolescout/monitoring"
+                    href="/lab/rolescout/applications"
                     className="text-sm font-medium text-blue-600 hover:text-blue-700"
                   >
                     View all &rarr;

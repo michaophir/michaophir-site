@@ -3,11 +3,11 @@ import Navbar from "@/components/navbar";
 import RoleScoutClient from "../rolescout-client";
 
 export const metadata: Metadata = {
-  title: "RoleScout — Job Hunt Monitoring",
-  description: "AI-powered job hunt monitoring dashboard.",
+  title: "RoleScout — Applications",
+  description: "Track your job applications and pipeline.",
 };
 
-export default function RoleScoutMonitoringPage() {
+export default function RoleScoutApplicationsPage() {
   return (
     <>
       <Navbar />

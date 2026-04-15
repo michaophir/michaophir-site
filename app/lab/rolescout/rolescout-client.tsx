@@ -6,10 +6,10 @@ import Papa from "papaparse";
 const DEMO_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?output=csv";
 
-const SAMPLE_CSV = `Job ID,Company,Role,Person,Date,Event,Source,Stage,State,Compensation,Location,Next Action,Next Action Date,Notes
-JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-15,Applied,LinkedIn,Applied,Active,280000-320000,San Francisco CA,,,https://anthropic.com/careers/JOB-001
-JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-25,Recruiter Screen,LinkedIn,Recruiter Screen,Active,280000-320000,San Francisco CA,Prep for HM interview,2026-04-15,https://anthropic.com/careers/JOB-001
-JOB-002,Stripe,Principal PM Payments,N/A,2026-03-20,Applied,Direct,Applied,Rejected,250000-290000,Remote,,,https://stripe.com/jobs/JOB-002
+const SAMPLE_CSV = `Job ID,Company,Role,Person,Date,Event,Source,Stage,State,Compensation,Location,Next Action,Next Action Date,Notes,Job URL
+JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-15,Applied,LinkedIn,Applied,Active,280000-320000,San Francisco CA,,,,https://anthropic.com/careers/JOB-001
+JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-25,Recruiter Screen,LinkedIn,Recruiter Screen,Active,280000-320000,San Francisco CA,Prep for HM interview,2026-04-15,,https://anthropic.com/careers/JOB-001
+JOB-002,Stripe,Principal PM Payments,N/A,2026-03-20,Applied,Direct,Applied,Rejected,250000-290000,Remote,,,,https://stripe.com/jobs/JOB-002
 `;
 
 const STAGES = [
@@ -140,6 +140,7 @@ type Row = {
   nextAction: string;
   nextActionDate: string;
   notes: string;
+  jobUrl: string;
 };
 
 type AggregatedJob = {
@@ -151,6 +152,7 @@ type AggregatedJob = {
   source: string; // first row's source
   nextAction: string;
   nextActionDate: string;
+  jobUrl: string;
   isExit: boolean;
   reachedApplied: boolean;
 };
@@ -175,6 +177,7 @@ function parseRow(raw: Record<string, unknown>): Row {
     nextAction: get("Next Action"),
     nextActionDate: get("Next Action Date"),
     notes: get("Notes"),
+    jobUrl: get("Job URL"),
   };
 }
 
@@ -281,6 +284,15 @@ function aggregateJobs(rows: Row[]): {
       }
     }
 
+    // Job URL from the latest row that has one, falling back to any non-empty.
+    let jobUrl = "";
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].jobUrl) {
+        jobUrl = sorted[i].jobUrl;
+        break;
+      }
+    }
+
     // Sankey flows on deduplicated data:
     //   Source -> highest stage reached (always, if stage is known)
     //   highest stage -> latest state (only if state is an exit)
@@ -303,6 +315,7 @@ function aggregateJobs(rows: Row[]): {
       source: firstSource,
       nextAction,
       nextActionDate,
+      jobUrl,
       isExit,
       reachedApplied,
     });
@@ -822,7 +835,7 @@ export default function RoleScoutClient() {
             </a>
             <h1 className="text-2xl font-bold tracking-tight">RoleScout</h1>
             <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-medium text-white">
-              Monitoring
+              Applications
             </span>
           </div>
           <div className="flex items-center gap-4">
@@ -1106,13 +1119,14 @@ export default function RoleScoutClient() {
                     <th className="pb-2 pr-2 font-medium">Stage</th>
                     <th className="pb-2 pr-2 font-medium">State</th>
                     <th className="pb-2 pr-2 font-medium">Next Action</th>
+                    <th className="whitespace-nowrap pb-2 pr-2 font-medium">Job URL</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredJobs.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="py-6 text-center text-gray-400"
                       >
                         No matching applications
@@ -1166,6 +1180,18 @@ export default function RoleScoutClient() {
                           ) : (
                             <span className="text-gray-300">—</span>
                           )}
+                        </td>
+                        <td className="whitespace-nowrap py-2 pr-2">
+                          {j.jobUrl ? (
+                            <a
+                              href={j.jobUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-600 hover:text-blue-700"
+                            >
+                              View&nbsp;↗
+                            </a>
+                          ) : null}
                         </td>
                       </tr>
                     );

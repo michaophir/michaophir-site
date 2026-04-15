@@ -42,7 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/lab/rolescout", icon: <IconDashboard /> },
   { label: "Profile & Skills", href: "/lab/rolescout/profile", icon: <IconProfile /> },
   { label: "Discover Roles", href: "/lab/rolescout/review", icon: <IconSearch /> },
-  { label: "My Applications", href: "/lab/rolescout/monitoring", icon: <IconBriefcase /> },
+  { label: "Applications", href: "/lab/rolescout/applications", icon: <IconBriefcase /> },
 ];
 
 export default function RoleScoutSidebar({ activeHref }: { activeHref: string }) {
