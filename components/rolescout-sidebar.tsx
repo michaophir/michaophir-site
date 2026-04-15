@@ -37,10 +37,18 @@ function IconBriefcase() {
     </svg>
   );
 }
+function IconScout() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2l2.39 4.84L19.8 7.6l-3.9 3.8.92 5.38L12 14.77l-4.82 2.01.92-5.38-3.9-3.8 5.41-.76L12 2z" />
+    </svg>
+  );
+}
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/lab/rolescout", icon: <IconDashboard /> },
   { label: "Profile & Skills", href: "/lab/rolescout/profile", icon: <IconProfile /> },
+  { label: "Scout", href: "/lab/rolescout/scout", icon: <IconScout /> },
   { label: "Discover Roles", href: "/lab/rolescout/review", icon: <IconSearch /> },
   { label: "Applications", href: "/lab/rolescout/applications", icon: <IconBriefcase /> },
 ];
