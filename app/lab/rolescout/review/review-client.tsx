@@ -21,6 +21,7 @@ type Job = {
   description: string;
   compensation_raw: string;
   tier: number;
+  match_score: number | null;
 };
 
 type WorkplacePill = "Remote" | "Hybrid" | "Onsite";
@@ -45,6 +46,12 @@ function parseRow(raw: Record<string, unknown>): Job {
     description: g("description"),
     compensation_raw: g("compensation_raw"),
     tier: Number(g("tier")) || 999,
+    match_score: (() => {
+      const raw = g("match_score");
+      if (raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    })(),
   };
 }
 
@@ -187,10 +194,12 @@ function JobCard({
   job,
   actions,
   onAction,
+  showMatchScore,
 }: {
   job: Job;
   actions: Record<string, Action>;
   onAction: (id: string, a: Action) => void;
+  showMatchScore?: boolean;
 }) {
   const state = actions[job.job_id];
   const isSaved = state === "save";
@@ -208,7 +217,14 @@ function JobCard({
     >
       <div>
         <div className="mb-1 flex items-start justify-between">
-          <p className="text-xs font-medium text-gray-400">{job.company}</p>
+          <div className="flex items-center gap-2">
+            {showMatchScore && job.match_score !== null && (
+              <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+                {job.match_score}
+              </span>
+            )}
+            <p className="text-xs font-medium text-gray-400">{job.company}</p>
+          </div>
           <ActionButtons jobId={job.job_id} actions={actions} onAction={onAction} />
         </div>
         <h3 className="mb-2 text-[15px] font-semibold leading-snug text-slate-900">
@@ -262,11 +278,13 @@ function CardGrid({
   jobs,
   actions,
   onAction,
+  showMatchScore,
 }: {
   title: string;
   jobs: Job[];
   actions: Record<string, Action>;
   onAction: (id: string, a: Action) => void;
+  showMatchScore?: boolean;
 }) {
   if (jobs.length === 0) return null;
   return (
@@ -274,7 +292,13 @@ function CardGrid({
       <SectionHeader title={title} />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {jobs.map((job) => (
-          <JobCard key={job.job_id} job={job} actions={actions} onAction={onAction} />
+          <JobCard
+            key={job.job_id}
+            job={job}
+            actions={actions}
+            onAction={onAction}
+            showMatchScore={showMatchScore}
+          />
         ))}
       </div>
     </section>
@@ -373,13 +397,14 @@ function ListingsTable({
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
+              <th className="px-5 py-3 w-[80px]"></th>
               <th className="px-5 py-3">Company</th>
               <th className="px-5 py-3">Role</th>
               <th className="px-5 py-3">Comp Range</th>
               <th className="px-5 py-3">Location</th>
               <th className="whitespace-nowrap px-5 py-3">Job URL</th>
               <th className="px-5 py-3 w-[280px]">Description</th>
-              <th className="px-5 py-3 w-[80px]"></th>
+              <th className="whitespace-nowrap px-5 py-3">Match Score</th>
             </tr>
           </thead>
           <tbody>
@@ -396,6 +421,13 @@ function ListingsTable({
                     : "hover:bg-gray-50/50"
                 }`}
               >
+                <td className="px-5 py-3">
+                  <ActionButtons
+                    jobId={job.job_id}
+                    actions={actions}
+                    onAction={onAction}
+                  />
+                </td>
                 <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-900">
                   {job.company}
                 </td>
@@ -423,12 +455,12 @@ function ListingsTable({
                   )}
                 </td>
                 <DescriptionTooltip text={job.description} />
-                <td className="px-5 py-3">
-                  <ActionButtons
-                    jobId={job.job_id}
-                    actions={actions}
-                    onAction={onAction}
-                  />
+                <td className="whitespace-nowrap px-5 py-3">
+                  {job.match_score !== null ? (
+                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+                      {job.match_score}
+                    </span>
+                  ) : null}
                 </td>
               </tr>
               );
@@ -570,7 +602,14 @@ export default function ReviewClient() {
     const seen = new Set<string>();
 
     const best = [...filtered]
-      .sort((a, b) => a.tier - b.tier)
+      .sort((a, b) => {
+        const aHas = a.match_score !== null;
+        const bHas = b.match_score !== null;
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        if (!aHas && !bHas) return 0;
+        return (b.match_score as number) - (a.match_score as number);
+      })
       .filter((j) => !seen.has(j.job_id))
       .slice(0, 3);
     best.forEach((j) => seen.add(j.job_id));
@@ -686,6 +725,7 @@ export default function ReviewClient() {
               jobs={bestMatch}
               actions={actions}
               onAction={handleAction}
+              showMatchScore
             />
             <CardGrid
               title="Top Paying"
