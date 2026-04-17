@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 
 const CSV_URL =
@@ -306,77 +306,50 @@ function CardGrid({
 }
 
 function DescriptionTooltip({ text }: { text: string }) {
-  const cellRef = useRef<HTMLTableCellElement>(null);
-  const tipRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; placement: "above" | "below" } | null>(null);
-
-  const show = useCallback(() => {
-    const cell = cellRef.current;
-    const tip = tipRef.current;
-    if (!cell || !tip) return;
-    const cellRect = cell.getBoundingClientRect();
-    const tipW = 400;
-    // Position to the right of the description cell, aligned with its right edge
-    let left = cellRect.right - tipW;
-    // Keep within viewport
-    if (left < 8) left = 8;
-
-    // Prefer above; if not enough room, go below
-    const spaceAbove = cellRect.top;
-    const spaceBelow = window.innerHeight - cellRect.bottom;
-    tip.style.visibility = "hidden";
-    tip.style.display = "block";
-    const tipH = tip.offsetHeight;
-    tip.style.display = "";
-    tip.style.visibility = "";
-
-    if (spaceAbove >= tipH + 8) {
-      setPos({ top: cellRect.top - tipH - 6, left, placement: "above" });
-    } else if (spaceBelow >= tipH + 8) {
-      setPos({ top: cellRect.bottom + 6, left, placement: "below" });
-    } else {
-      // Fallback: above anyway
-      setPos({ top: cellRect.top - tipH - 6, left, placement: "above" });
-    }
-  }, []);
-
-  const hide = useCallback(() => setPos(null), []);
-
   return (
-    <td
-      ref={cellRef}
-      className="px-5 py-3"
-      onMouseEnter={show}
-      onMouseLeave={hide}
-    >
-      <p className="line-clamp-2 cursor-default text-gray-500">{text}</p>
-      {text && pos && (
-        <div
-          ref={tipRef}
-          className="fixed z-[100] w-[400px] max-w-[90vw] rounded-lg bg-slate-900 px-4 py-3 text-sm leading-relaxed text-white shadow-xl"
-          style={{ top: pos.top, left: pos.left }}
-        >
-          {text}
-          <div
-            className={`absolute left-1/2 -translate-x-1/2 border-[6px] border-transparent ${
-              pos.placement === "above"
-                ? "top-full border-t-slate-900"
-                : "bottom-full border-b-slate-900"
-            }`}
-          />
-        </div>
-      )}
-      {/* Hidden measure element */}
-      {text && !pos && (
-        <div
-          ref={tipRef}
-          className="fixed invisible w-[400px] max-w-[90vw] rounded-lg bg-slate-900 px-4 py-3 text-sm leading-relaxed"
-          style={{ top: -9999, left: -9999 }}
-        >
-          {text}
-        </div>
-      )}
+    <td className="px-5 py-3 text-gray-500">
+      <div className="line-clamp-2 cursor-default" title={text || undefined}>
+        {text}
+      </div>
     </td>
+  );
+}
+
+type SortKey = "company" | "role" | "match_score" | "compensation";
+type SortDir = "asc" | "desc";
+
+function SortableHeader({
+  label,
+  columnKey,
+  activeKey,
+  activeDir,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  columnKey: SortKey;
+  activeKey: SortKey | null;
+  activeDir: SortDir;
+  onClick: (k: SortKey) => void;
+  className?: string;
+}) {
+  const isActive = activeKey === columnKey;
+  const arrow = !isActive ? "" : activeDir === "asc" ? "↑" : "↓";
+  return (
+    <th className={`px-5 py-3 ${className}`}>
+      <button
+        type="button"
+        onClick={() => onClick(columnKey)}
+        className={`inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider transition ${
+          isActive ? "text-slate-900" : "text-gray-400 hover:text-slate-700"
+        }`}
+      >
+        {label}
+        <span className={`text-[10px] ${isActive ? "opacity-100" : "opacity-30"}`}>
+          {arrow || "⇅"}
+        </span>
+      </button>
+    </th>
   );
 }
 
@@ -389,6 +362,55 @@ function ListingsTable({
   actions: Record<string, Action>;
   onAction: (id: string, a: Action) => void;
 }) {
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const primaryDir = (k: SortKey): SortDir =>
+    k === "match_score" || k === "compensation" ? "desc" : "asc";
+
+  const handleSort = (k: SortKey) => {
+    if (sortKey !== k) {
+      setSortKey(k);
+      setSortDir(primaryDir(k));
+    } else if (sortDir === primaryDir(k)) {
+      setSortDir(primaryDir(k) === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(null);
+    }
+  };
+
+  const sortedJobs = useMemo(() => {
+    if (sortKey === null) return jobs;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const sortVal = (j: Job): { key: string | number; hasValue: boolean } => {
+      switch (sortKey) {
+        case "company":
+          return { key: j.company.toLowerCase(), hasValue: !!j.company };
+        case "role":
+          return { key: j.job_title.toLowerCase(), hasValue: !!j.job_title };
+        case "match_score":
+          return {
+            key: j.match_score ?? 0,
+            hasValue: j.match_score !== null,
+          };
+        case "compensation": {
+          const mid = parseCompMidpoint(j.compensation_raw);
+          return { key: mid, hasValue: mid > 0 };
+        }
+      }
+    };
+    return [...jobs].sort((a, b) => {
+      const va = sortVal(a);
+      const vb = sortVal(b);
+      if (va.hasValue && !vb.hasValue) return -1;
+      if (!va.hasValue && vb.hasValue) return 1;
+      if (!va.hasValue && !vb.hasValue) return 0;
+      if (va.key < vb.key) return -1 * dir;
+      if (va.key > vb.key) return 1 * dir;
+      return 0;
+    });
+  }, [jobs, sortKey, sortDir]);
+
   if (jobs.length === 0) return null;
   return (
     <section>
@@ -397,18 +419,44 @@ function ListingsTable({
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
-              <th className="px-5 py-3 w-[80px]"></th>
-              <th className="px-5 py-3">Company</th>
-              <th className="px-5 py-3">Role</th>
-              <th className="px-5 py-3">Comp Range</th>
-              <th className="px-5 py-3">Location</th>
+              <th className="whitespace-nowrap px-5 py-3 w-[80px]">Save Role</th>
+              <SortableHeader
+                label="Company"
+                columnKey="company"
+                activeKey={sortKey}
+                activeDir={sortDir}
+                onClick={handleSort}
+              />
+              <SortableHeader
+                label="Role"
+                columnKey="role"
+                activeKey={sortKey}
+                activeDir={sortDir}
+                onClick={handleSort}
+              />
+              <SortableHeader
+                label="Match Score"
+                columnKey="match_score"
+                activeKey={sortKey}
+                activeDir={sortDir}
+                onClick={handleSort}
+                className="whitespace-nowrap"
+              />
               <th className="whitespace-nowrap px-5 py-3">Job URL</th>
+              <SortableHeader
+                label="Comp Range"
+                columnKey="compensation"
+                activeKey={sortKey}
+                activeDir={sortDir}
+                onClick={handleSort}
+                className="whitespace-nowrap"
+              />
+              <th className="px-5 py-3 w-[360px]">Location</th>
               <th className="px-5 py-3 w-[280px]">Description</th>
-              <th className="whitespace-nowrap px-5 py-3">Match Score</th>
             </tr>
           </thead>
           <tbody>
-            {jobs.map((job) => {
+            {sortedJobs.map((job) => {
               const rowState = actions[job.job_id];
               return (
               <tr
@@ -434,11 +482,12 @@ function ListingsTable({
                 <td className="whitespace-nowrap px-5 py-3 text-slate-700">
                   {job.job_title}
                 </td>
-                <td className="whitespace-nowrap px-5 py-3 text-gray-500">
-                  {formatCompShort(job.compensation_raw)}
-                </td>
-                <td className="whitespace-nowrap px-5 py-3 text-gray-500">
-                  {job.location || "—"}
+                <td className="whitespace-nowrap px-5 py-3">
+                  {job.match_score !== null ? (
+                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+                      {job.match_score}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3">
                   {job.job_url ? (
@@ -454,14 +503,18 @@ function ListingsTable({
                     <span className="text-gray-300">—</span>
                   )}
                 </td>
-                <DescriptionTooltip text={job.description} />
-                <td className="whitespace-nowrap px-5 py-3">
-                  {job.match_score !== null ? (
-                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
-                      {job.match_score}
-                    </span>
-                  ) : null}
+                <td className="whitespace-nowrap px-5 py-3 text-gray-500">
+                  {formatCompShort(job.compensation_raw)}
                 </td>
+                <td className="px-5 py-3 text-gray-500">
+                  <div
+                    className="w-[360px] truncate"
+                    title={job.location || undefined}
+                  >
+                    {job.location || "—"}
+                  </div>
+                </td>
+                <DescriptionTooltip text={job.description} />
               </tr>
               );
             })}
