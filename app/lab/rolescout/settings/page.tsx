@@ -1,30 +1,30 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/navbar";
 import RoleScoutSidebar from "@/components/rolescout-sidebar";
-import ProfileClient from "./profile-client";
+import SettingsClient from "./settings-client";
 
 export const metadata: Metadata = {
-  title: "RoleScout — Profile & Skills",
-  description: "Resume, skills, and story bank for smarter job matching.",
+  title: "RoleScout — Settings",
+  description: "Manage your API keys and local data.",
 };
 
-export default function ProfilePage() {
+export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
       <Navbar />
       <div className="flex">
-        <RoleScoutSidebar activeHref="/lab/rolescout/profile" />
+        <RoleScoutSidebar activeHref="/lab/rolescout/settings" />
         <main className="flex-1 px-10 py-10">
           <div className="max-w-6xl">
             <div className="mb-8">
               <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                Profile &amp; Skills
+                Settings
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Upload your Resume to build your candidate profile. The AI extracts your skills, experience, and story bank.
+                Manage your API keys and local data.
               </p>
             </div>
-            <ProfileClient />
+            <SettingsClient />
           </div>
         </main>
       </div>
