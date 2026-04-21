@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
+import { getOpenRolesCsv, setOpenRolesCsv } from "../lib/storage";
 
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?gid=1874433807&single=true&output=csv";
@@ -566,6 +567,15 @@ export default function ReviewClient() {
   );
 
   useEffect(() => {
+    const saved = getOpenRolesCsv();
+    if (saved) {
+      const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
+      const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+      setJobs(parsed.filter((j) => j.job_id));
+      setMode("personal");
+      setLoading(false);
+      return;
+    }
     fetch(CSV_URL)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch data");
@@ -591,6 +601,7 @@ export default function ReviewClient() {
       setJobs(parsed.filter((j) => j.job_id));
       setMode("personal");
       setActions({});
+      setOpenRolesCsv(text);
     };
     reader.readAsText(file);
     e.target.value = "";

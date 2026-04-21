@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
+import { getTrackingCsv, setTrackingCsv } from "./lib/storage";
 
 const DEMO_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?output=csv";
@@ -703,6 +704,17 @@ export default function RoleScoutClient() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+
+    const saved = getTrackingCsv();
+    if (saved) {
+      const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
+      const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+      setRows(parsed);
+      setMode("personal");
+      setLoading(false);
+      return;
+    }
+
     fetch(DEMO_CSV_URL)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -728,16 +740,18 @@ export default function RoleScoutClient() {
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    Papa.parse<Record<string, unknown>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (result) => {
-        const parsed = result.data.map(parseRow);
-        setRows(parsed);
-        setMode("personal");
-      },
-      error: (err) => setError(String(err)),
-    });
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+      const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+      setRows(parsed);
+      setMode("personal");
+      setTrackingCsv(text);
+    };
+    reader.onerror = () => setError(String(reader.error));
+    reader.readAsText(file);
+    e.target.value = "";
   }
 
   function handleDownloadSample() {

@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ApiProvider } from "../lib/storage";
 import {
   clearAllRolescout,
   getAnthropicKey,
   getAnthropicModel,
+  getCandidateProfile,
   getGeminiKey,
   getGeminiModel,
+  getLastRunSummary,
   getOpenAIKey,
   getOpenAIModel,
+  getOpenRolesCsv,
+  getTrackingCsv,
   removeAnthropicKey,
   removeCandidateProfile,
   removeGeminiKey,
@@ -19,10 +23,14 @@ import {
   removeTrackingCsv,
   setAnthropicKey,
   setAnthropicModel,
+  setCandidateProfile,
   setGeminiKey,
   setGeminiModel,
+  setLastRunSummary,
   setOpenAIKey,
   setOpenAIModel,
+  setOpenRolesCsv,
+  setTrackingCsv,
 } from "../lib/storage";
 
 type ModelOption = {
@@ -113,6 +121,70 @@ function readAllModels(): KeysState {
   };
 }
 
+type DataRawState = {
+  candidateProfile: string;
+  openRolesCsv: string;
+  trackingCsv: string;
+  lastRunSummary: string;
+};
+
+const EMPTY_DATA_RAW: DataRawState = {
+  candidateProfile: "",
+  openRolesCsv: "",
+  trackingCsv: "",
+  lastRunSummary: "",
+};
+
+function readAllDataRaw(): DataRawState {
+  return {
+    candidateProfile: getCandidateProfile(),
+    openRolesCsv: getOpenRolesCsv(),
+    trackingCsv: getTrackingCsv(),
+    lastRunSummary: getLastRunSummary(),
+  };
+}
+
+function countCsvRows(text: string): number {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  return Math.max(0, lines.length - 1);
+}
+
+function parseLocalDate(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatRunDateFromSummary(json: string): string {
+  if (!json) return "Saved";
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    const raw = (o.run_date ?? o.runDate) as unknown;
+    if (typeof raw === "string") {
+      const d = parseLocalDate(raw);
+      if (d) {
+        return d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return "Saved";
+}
+
+function keysSummaryText(keys: KeysState): string {
+  const parts: string[] = [];
+  for (const p of PROVIDERS) {
+    if (keys[p.id]) parts.push(p.label);
+  }
+  return parts.length === 0 ? "No keys saved" : parts.join(" · ");
+}
+
 export default function SettingsClient() {
   const [activeTab, setActiveTab] = useState<ApiProvider>("anthropic");
   const [savedKeys, setSavedKeys] = useState<KeysState>(EMPTY_KEYS);
@@ -124,14 +196,20 @@ export default function SettingsClient() {
   });
   const [clearedMessage, setClearedMessage] = useState(false);
   const [models, setModels] = useState<KeysState>(defaultModels());
+  const [dataRaw, setDataRaw] = useState<DataRawState>(EMPTY_DATA_RAW);
 
   useEffect(() => {
     setSavedKeys(readAllKeys());
     setModels(readAllModels());
+    setDataRaw(readAllDataRaw());
   }, []);
 
-  function refreshAll() {
+  function refreshKeys() {
     setSavedKeys(readAllKeys());
+  }
+
+  function refreshData() {
+    setDataRaw(readAllDataRaw());
   }
 
   function handleModelChange(provider: ApiProvider, value: string) {
@@ -148,21 +226,21 @@ export default function SettingsClient() {
     if (provider === "openai") setOpenAIKey(value);
     if (provider === "gemini") setGeminiKey(value);
     setInputs((prev) => ({ ...prev, [provider]: "" }));
-    refreshAll();
+    refreshKeys();
   }
 
   function handleRemoveKey(provider: ApiProvider) {
     if (provider === "anthropic") removeAnthropicKey();
     if (provider === "openai") removeOpenAIKey();
     if (provider === "gemini") removeGeminiKey();
-    refreshAll();
+    refreshKeys();
   }
 
   function handleClearAllKeys() {
     removeAnthropicKey();
     removeOpenAIKey();
     removeGeminiKey();
-    refreshAll();
+    refreshKeys();
   }
 
   function handleClearAll() {
@@ -170,6 +248,7 @@ export default function SettingsClient() {
     setSavedKeys(EMPTY_KEYS);
     setInputs(EMPTY_KEYS);
     setModels(defaultModels());
+    setDataRaw(EMPTY_DATA_RAW);
     setClearedMessage(true);
     window.setTimeout(() => setClearedMessage(false), 2500);
   }
@@ -179,10 +258,14 @@ export default function SettingsClient() {
   const activeInput = inputs[activeTab];
   const activeRevealed = revealed[activeTab];
 
+  const anyKeySaved = Boolean(
+    savedKeys.anthropic || savedKeys.openai || savedKeys.gemini
+  );
+
   return (
-    <div className="max-w-2xl">
-      {/* Card 1 — API Key */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+    <div className="max-w-5xl grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+      {/* Left column — API Key card */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
         <h3 className="text-lg font-semibold text-slate-900">API Key</h3>
         <p className="text-sm text-gray-500 mt-1 mb-6">
           Used for resume parsing and AI features. Your key is saved locally in your browser and never sent anywhere except the provider&apos;s API.
@@ -313,68 +396,118 @@ export default function SettingsClient() {
         >
           Continue with demo data
         </button>
+
+        {/* Footer note */}
+        <p className="text-xs text-gray-400 mt-4 flex items-start gap-1.5">
+          <span aria-hidden="true">ⓘ</span>
+          <span>
+            Get your key at{" "}
+            <a
+              href={activeMeta.consoleHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-500 underline"
+            >
+              {activeMeta.consoleLabel}
+            </a>
+            . Your key is only used to make API calls directly from your browser — it is never logged or stored.
+          </span>
+        </p>
       </div>
 
-      {/* Footer note (outside card) */}
-      <p className="text-xs text-gray-400 mt-3 flex items-start gap-1.5 mb-6">
-        <span aria-hidden="true">ⓘ</span>
-        <span>
-          Get your key at{" "}
-          <a
-            href={activeMeta.consoleHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-500 underline"
-          >
-            {activeMeta.consoleLabel}
-          </a>
-          . Your key is only used to make API calls directly from your browser — it is never logged or stored.
-        </span>
-      </p>
-
-      {/* Card 2 — Data & Storage */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+      {/* Right column — Data & Storage card */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
         <h3 className="text-lg font-semibold text-slate-900">Data &amp; Storage</h3>
         <p className="text-sm text-gray-500 mt-1 mb-6">
           All RoleScout data lives in your browser&apos;s localStorage. Clear individual items or wipe everything.
         </p>
 
         <div>
-          <DataRow
+          <DataItem
             name="Candidate Profile"
             description="Resume and parsed profile JSON"
+            statusPresent={dataRaw.candidateProfile !== ""}
+            statusText={dataRaw.candidateProfile !== "" ? "Saved" : "Empty"}
+            upload={{
+              label: "Upload JSON",
+              accept: ".json",
+              validateAsJson: true,
+              onText: (text) => setCandidateProfile(text),
+            }}
             onClear={() => {
               removeCandidateProfile();
-              refreshAll();
+              refreshData();
             }}
+            onAfterUpload={refreshData}
           />
-          <DataRow
+          <DataItem
             name="Open Roles CSV"
             description="Last scraper output"
+            statusPresent={dataRaw.openRolesCsv !== ""}
+            statusText={
+              dataRaw.openRolesCsv !== ""
+                ? `${countCsvRows(dataRaw.openRolesCsv)} rows`
+                : "Empty"
+            }
+            upload={{
+              label: "Upload CSV",
+              accept: ".csv",
+              validateAsJson: false,
+              onText: (text) => setOpenRolesCsv(text),
+            }}
             onClear={() => {
               removeOpenRolesCsv();
-              refreshAll();
+              refreshData();
             }}
+            onAfterUpload={refreshData}
           />
-          <DataRow
+          <DataItem
             name="Tracking CSV"
             description="Your application history"
+            statusPresent={dataRaw.trackingCsv !== ""}
+            statusText={
+              dataRaw.trackingCsv !== ""
+                ? `${countCsvRows(dataRaw.trackingCsv)} rows`
+                : "Empty"
+            }
+            upload={{
+              label: "Upload CSV",
+              accept: ".csv",
+              validateAsJson: false,
+              onText: (text) => setTrackingCsv(text),
+            }}
             onClear={() => {
               removeTrackingCsv();
-              refreshAll();
+              refreshData();
             }}
+            onAfterUpload={refreshData}
           />
-          <DataRow
+          <DataItem
             name="Last Run Summary"
             description="Scraper run metadata"
+            statusPresent={dataRaw.lastRunSummary !== ""}
+            statusText={
+              dataRaw.lastRunSummary !== ""
+                ? formatRunDateFromSummary(dataRaw.lastRunSummary)
+                : "Empty"
+            }
+            upload={{
+              label: "Upload JSON",
+              accept: ".json",
+              validateAsJson: true,
+              onText: (text) => setLastRunSummary(text),
+            }}
             onClear={() => {
               removeLastRunSummary();
-              refreshAll();
+              refreshData();
             }}
+            onAfterUpload={refreshData}
           />
-          <DataRow
+          <DataItem
             name="API Keys"
             description="All saved provider keys"
+            statusPresent={anyKeySaved}
+            statusText={keysSummaryText(savedKeys)}
             onClear={handleClearAllKeys}
           />
         </div>
@@ -394,28 +527,105 @@ export default function SettingsClient() {
   );
 }
 
-function DataRow({
+type UploadConfig = {
+  label: string;
+  accept: string;
+  validateAsJson: boolean;
+  onText: (text: string) => void;
+};
+
+function DataItem({
   name,
   description,
+  statusPresent,
+  statusText,
+  upload,
   onClear,
+  onAfterUpload,
 }: {
   name: string;
   description: string;
-  onClear: () => void;
+  statusPresent: boolean;
+  statusText: string;
+  upload?: UploadConfig;
+  onClear?: () => void;
+  onAfterUpload?: () => void;
 }) {
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function onUploadClick() {
+    setError(null);
+    inputRef.current?.click();
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !upload) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result ?? "");
+      if (upload.validateAsJson) {
+        try {
+          JSON.parse(text);
+        } catch {
+          setError("Invalid file");
+          return;
+        }
+      }
+      upload.onText(text);
+      setError(null);
+      onAfterUpload?.();
+    };
+    reader.onerror = () => setError("Invalid file");
+    reader.readAsText(file);
+  }
+
   return (
-    <div className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-      <div>
+    <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
+      <div className="min-w-0">
         <div className="text-sm font-medium text-slate-900">{name}</div>
-        <div className="text-xs text-gray-400">{description}</div>
+        <div className="text-xs text-gray-400 mt-0.5">{description}</div>
+        <div className="mt-1 flex items-center text-xs text-gray-500">
+          <span
+            className={`w-2 h-2 rounded-full inline-block mr-1.5 ${
+              statusPresent ? "bg-green-500" : "bg-gray-300"
+            }`}
+          />
+          {statusText}
+        </div>
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>
-      <button
-        type="button"
-        onClick={onClear}
-        className="text-xs text-red-500 hover:text-red-700 underline cursor-pointer"
-      >
-        Clear
-      </button>
+      <div className="flex items-center shrink-0">
+        {upload && (
+          <>
+            <button
+              type="button"
+              onClick={onUploadClick}
+              className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-gray-50 transition"
+            >
+              {upload.label}
+            </button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept={upload.accept}
+              onChange={onFileChange}
+              className="hidden"
+            />
+          </>
+        )}
+        {statusPresent && onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs text-red-500 hover:text-red-700 underline cursor-pointer ml-3"
+          >
+            Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Papa from "papaparse";
+import { getLastRunSummary, setLastRunSummary } from "../lib/storage";
 
 // ---------- Types ----------
 
@@ -384,12 +385,87 @@ function RunScraperSection() {
 
 // ---------- Last Run Summary ----------
 
+function normalizeSummary(raw: unknown): LastRunSummary {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const companiesSucceeded = num(o.companiesSucceeded ?? o.companies_succeeded);
+  const companiesTotalRaw = o.companies_total;
+  const companiesFailed =
+    typeof o.companiesFailed === "number"
+      ? o.companiesFailed
+      : typeof o.companies_failed === "number"
+      ? o.companies_failed
+      : typeof companiesTotalRaw === "number"
+      ? companiesTotalRaw - companiesSucceeded
+      : 0;
+  const rolesFetched = num(
+    o.rolesFetched ?? o.roles_fetched ?? o.roles_fetched_post_filter
+  );
+  const atsRaw = Array.isArray(o.atsBreakdown)
+    ? o.atsBreakdown
+    : Array.isArray(o.ats_breakdown)
+    ? o.ats_breakdown
+    : [];
+  const atsBreakdown: AtsRow[] = atsRaw
+    .map((r) => {
+      const row = (r ?? {}) as Record<string, unknown>;
+      return { name: str(row.name), count: num(row.count) };
+    })
+    .filter((r) => r.name !== "");
+  return {
+    runDate: str(o.runDate ?? o.run_date),
+    companiesSucceeded,
+    companiesFailed,
+    rolesFetched,
+    atsBreakdown,
+  };
+}
+
 function LastRunSummarySection() {
-  const data = DEMO_LAST_RUN;
+  const [data, setData] = useState<LastRunSummary>(DEMO_LAST_RUN);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const saved = getLastRunSummary();
+    if (!saved) return;
+    try {
+      setData(normalizeSummary(JSON.parse(saved)));
+    } catch {
+      // leave demo in place
+    }
+  }, []);
+
+  function onUploadClick() {
+    setUploadError(null);
+    fileInputRef.current?.click();
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result ?? "");
+      try {
+        const parsed = JSON.parse(text);
+        setData(normalizeSummary(parsed));
+        setLastRunSummary(text);
+        setUploadError(null);
+      } catch {
+        setUploadError("Invalid JSON file.");
+      }
+    };
+    reader.onerror = () => setUploadError("Invalid JSON file.");
+    reader.readAsText(file);
+  }
+
   return (
     <SectionCard
       title="Last Run Summary"
-      subtitle={`Completed ${data.runDate}`}
+      subtitle={data.runDate ? `Completed ${data.runDate}` : "No run yet"}
     >
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <StatTile
@@ -433,6 +509,26 @@ function LastRunSummarySection() {
             );
           })}
         </ul>
+      </div>
+
+      <div className="mt-6 border-t border-gray-100 pt-4">
+        <button
+          type="button"
+          onClick={onUploadClick}
+          className="rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 transition"
+        >
+          Upload last_run_summary.json
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={onFileChange}
+          className="hidden"
+        />
+        {uploadError && (
+          <p className="text-xs text-red-500 mt-2">{uploadError}</p>
+        )}
       </div>
     </SectionCard>
   );
