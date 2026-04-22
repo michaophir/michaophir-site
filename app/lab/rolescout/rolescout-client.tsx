@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import { getTrackingCsv, setTrackingCsv } from "./lib/storage";
 
+const TRACKING_UPDATED_EVENT = "rolescout-tracking-updated";
+
 const DEMO_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?output=csv";
 
@@ -680,8 +682,6 @@ export default function RoleScoutClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Filters
   const [stageFilter, setStageFilter] = useState("all");
   const [stateFilter, setStateFilter] = useState("all");
@@ -702,69 +702,51 @@ export default function RoleScoutClient() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
-    const saved = getTrackingCsv();
-    if (saved) {
+    const loadFromStorage = () => {
+      const saved = getTrackingCsv();
+      if (!saved) return false;
       const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
       const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
       setRows(parsed);
       setMode("personal");
       setLoading(false);
-      return;
+      return true;
+    };
+
+    setLoading(true);
+    setError(null);
+
+    if (!loadFromStorage()) {
+      fetch(DEMO_CSV_URL)
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.text();
+        })
+        .then((text) => {
+          if (cancelled) return;
+          const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+          const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+          setRows(parsed);
+          setLoading(false);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setError(String(e));
+          setLoading(false);
+        });
     }
 
-    fetch(DEMO_CSV_URL)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then((text) => {
-        if (cancelled) return;
-        const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-        const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
-        setRows(parsed);
-        setLoading(false);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(String(e));
-        setLoading(false);
-      });
+    const onUpdate = () => {
+      loadFromStorage();
+    };
+    window.addEventListener(TRACKING_UPDATED_EVENT, onUpdate);
+
     return () => {
       cancelled = true;
+      window.removeEventListener(TRACKING_UPDATED_EVENT, onUpdate);
     };
   }, []);
-
-  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-      const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
-      setRows(parsed);
-      setMode("personal");
-      setTrackingCsv(text);
-    };
-    reader.onerror = () => setError(String(reader.error));
-    reader.readAsText(file);
-    e.target.value = "";
-  }
-
-  function handleDownloadSample() {
-    const blob = new Blob([SAMPLE_CSV], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "rolescout-sample.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
 
   const { jobs, transitions } = useMemo(() => aggregateJobs(rows), [rows]);
   const stats = useMemo(() => computeStats(jobs), [jobs]);
@@ -836,48 +818,8 @@ export default function RoleScoutClient() {
   const totalApplications = useMemo(() => jobs.length, [jobs]);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-slate-900">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-          <div className="flex items-center gap-4">
-            <a
-              href="/lab/rolescout"
-              className="text-sm font-medium text-gray-500 transition hover:text-slate-900"
-            >
-              &larr; Back
-            </a>
-            <h1 className="text-2xl font-bold tracking-tight">RoleScout</h1>
-            <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-medium text-white">
-              Applications
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleDownloadSample}
-              className="text-sm font-medium text-gray-500 underline decoration-gray-300 underline-offset-4 transition hover:text-slate-900 hover:decoration-slate-900"
-            >
-              Download sample CSV
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleUpload}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-            >
-              Upload CSV
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-6 py-8">
+    <div>
+      <div>
         {/* Demo banner */}
         {mode === "demo" && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -1300,6 +1242,61 @@ function FilterSelect({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+export function ApplicationsActions() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result ?? "");
+      setTrackingCsv(text);
+      window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
+    };
+    reader.readAsText(file);
+  }
+
+  function downloadSample() {
+    const blob = new Blob([SAMPLE_CSV], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "rolescout-sample.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      <button
+        type="button"
+        onClick={downloadSample}
+        className="text-sm font-medium text-gray-500 underline decoration-gray-300 underline-offset-4 transition hover:text-slate-900 hover:decoration-slate-900"
+      >
+        Download sample CSV
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv"
+        onChange={onChange}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+      >
+        Upload CSV
+      </button>
     </div>
   );
 }

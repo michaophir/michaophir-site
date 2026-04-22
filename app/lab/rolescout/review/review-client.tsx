@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import { getOpenRolesCsv, setOpenRolesCsv } from "../lib/storage";
 
+const OPEN_ROLES_UPDATED_EVENT = "rolescout-open-roles-updated";
+
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?gid=1874433807&single=true&output=csv";
 
@@ -559,7 +561,6 @@ export default function ReviewClient() {
   const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
   const [actions, setActions] = useState<Record<string, Action>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const savedCount = useMemo(
     () => Object.values(actions).filter((a) => a === "save").length,
@@ -567,45 +568,39 @@ export default function ReviewClient() {
   );
 
   useEffect(() => {
-    const saved = getOpenRolesCsv();
-    if (saved) {
+    const loadFromStorage = () => {
+      const saved = getOpenRolesCsv();
+      if (!saved) return false;
       const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
       const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
       setJobs(parsed.filter((j) => j.job_id));
       setMode("personal");
-      setLoading(false);
-      return;
-    }
-    fetch(CSV_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch data");
-        return res.text();
-      })
-      .then((text) => {
-        const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-        const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
-        setJobs(parsed.filter((j) => j.job_id));
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-      const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
-      setJobs(parsed.filter((j) => j.job_id));
-      setMode("personal");
       setActions({});
-      setOpenRolesCsv(text);
+      setLoading(false);
+      return true;
     };
-    reader.readAsText(file);
-    e.target.value = "";
-  };
+
+    if (!loadFromStorage()) {
+      fetch(CSV_URL)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch data");
+          return res.text();
+        })
+        .then((text) => {
+          const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+          const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+          setJobs(parsed.filter((j) => j.job_id));
+        })
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    }
+
+    const onUpdate = () => {
+      loadFromStorage();
+    };
+    window.addEventListener(OPEN_ROLES_UPDATED_EVENT, onUpdate);
+    return () => window.removeEventListener(OPEN_ROLES_UPDATED_EVENT, onUpdate);
+  }, []);
 
   const togglePill = (pill: WorkplacePill | DatePill) => {
     if (pill === "Remote" || pill === "Hybrid" || pill === "Onsite") {
@@ -696,49 +691,19 @@ export default function ReviewClient() {
   }, [filtered]);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-slate-900">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-          <div className="flex items-center gap-4">
-            <a
-              href="/lab/rolescout"
-              className="text-sm font-medium text-gray-500 transition hover:text-slate-900"
-            >
-              &larr; Back
-            </a>
-            <h1 className="text-2xl font-bold tracking-tight">RoleScout</h1>
-            <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-medium text-white">
-              Review
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            {savedCount > 0 && (
-              <button
-                onClick={() => downloadSavedCsv(jobs, actions)}
-                className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
-              >
-                Download Saved ({savedCount})
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleUpload}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-            >
-              Upload CSV
-            </button>
-          </div>
+    <>
+      {savedCount > 0 && (
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => downloadSavedCsv(jobs, actions)}
+            className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+          >
+            Download Saved ({savedCount})
+          </button>
         </div>
-      </header>
+      )}
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div>
         {/* Demo banner */}
         {mode === "demo" && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -811,6 +776,42 @@ export default function ReviewClient() {
           </>
         )}
       </div>
-    </div>
+    </>
+  );
+}
+
+export function ReviewUploadButton() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result ?? "");
+      setOpenRolesCsv(text);
+      window.dispatchEvent(new CustomEvent(OPEN_ROLES_UPDATED_EVENT));
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv"
+        onChange={onChange}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+      >
+        Upload CSV
+      </button>
+    </>
   );
 }

@@ -15,12 +15,14 @@ export default function Navbar() {
           Micha Ophir
         </a>
         <div className="flex items-center gap-6 text-sm font-medium text-gray-600">
-          <a href="/lab" className="transition hover:text-gray-900">
-            The Lab
-          </a>
-          <a href="#ai-run" className="transition hover:text-gray-900">
-            AI-Run Company
-          </a>
+          <div className="hidden lg:flex items-center gap-6">
+            <a href="/lab" className="transition hover:text-gray-900">
+              The Lab
+            </a>
+            <a href="#ai-run" className="transition hover:text-gray-900">
+              AI-Run Company
+            </a>
+          </div>
           <a
             href="https://cal.com/michaophir/30min"
             className="rounded-full bg-gray-900 px-4 py-1.5 text-white transition hover:bg-gray-700"

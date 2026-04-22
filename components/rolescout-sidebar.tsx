@@ -1,10 +1,37 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 type NavItem = {
   label: string;
   href: string;
   icon: ReactNode;
 };
+
+const STORAGE_KEY = "rolescout_sidebar_collapsed";
+const OPEN_EVENT = "rolescout-sidebar-open";
+const COLLAPSE_CHANGED_EVENT = "rolescout-sidebar-collapse-changed";
+
+function subscribeCollapsed(callback: () => void) {
+  window.addEventListener(COLLAPSE_CHANGED_EVENT, callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener(COLLAPSE_CHANGED_EVENT, callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function getCollapsedSnapshot() {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function getCollapsedServerSnapshot() {
+  return false;
+}
 
 function IconDashboard() {
   return (
@@ -53,6 +80,38 @@ function IconSettings() {
   );
 }
 
+function IconChevronLeft() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
+function IconHamburger() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/lab/rolescout", icon: <IconDashboard /> },
   { label: "Scout", href: "/lab/rolescout/scout", icon: <IconScout /> },
@@ -65,55 +124,107 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   { label: "Settings", href: "/lab/rolescout/settings", icon: <IconSettings /> },
 ];
 
-export default function RoleScoutSidebar({ activeHref }: { activeHref: string }) {
+function ExpandedNavList({
+  items,
+  activeHref,
+  onNavClick,
+}: {
+  items: NavItem[];
+  activeHref: string;
+  onNavClick?: () => void;
+}) {
   return (
-    <aside className="sticky top-[65px] flex h-[calc(100vh-65px)] w-[260px] shrink-0 flex-col border-r border-gray-200 bg-white">
-      <div className="px-6 py-6">
-        <h1 className="text-lg font-bold tracking-tight text-slate-900">RoleScout</h1>
-        <p className="text-xs text-gray-400">Job Search OS</p>
+    <ul className="space-y-1">
+      {items.map((item) => {
+        const active = item.href === activeHref;
+        return (
+          <li key={item.label}>
+            <a
+              href={item.href}
+              onClick={onNavClick}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                active
+                  ? "bg-blue-700 text-white"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-slate-900"
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function CollapsedNavList({
+  items,
+  activeHref,
+}: {
+  items: NavItem[];
+  activeHref: string;
+}) {
+  return (
+    <ul className="flex flex-col items-center space-y-1">
+      {items.map((item) => {
+        const active = item.href === activeHref;
+        return (
+          <li key={item.label}>
+            <a
+              href={item.href}
+              title={item.label}
+              aria-label={item.label}
+              className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${
+                active
+                  ? "text-blue-700"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-slate-900"
+              }`}
+            >
+              {item.icon}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ExpandedContent({
+  activeHref,
+  onNavClick,
+  onCollapse,
+}: {
+  activeHref: string;
+  onNavClick?: () => void;
+  onCollapse?: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between px-6 py-6">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">RoleScout</h1>
+          <p className="text-xs text-gray-400">Job Search OS</p>
+        </div>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Collapse sidebar"
+            className="text-gray-400 hover:text-slate-900 transition"
+          >
+            <IconChevronLeft />
+          </button>
+        )}
       </div>
       <nav className="flex-1 px-3">
-        <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const active = item.href === activeHref;
-            return (
-              <li key={item.label}>
-                <a
-                  href={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                    active
-                      ? "bg-blue-700 text-white"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-slate-900"
-                  }`}
-                >
-                  {item.icon}
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
+        <ExpandedNavList items={NAV_ITEMS} activeHref={activeHref} onNavClick={onNavClick} />
         <div className="mx-3 my-2 h-px bg-gray-100" />
-        <ul className="space-y-1">
-          {SECONDARY_NAV_ITEMS.map((item) => {
-            const active = item.href === activeHref;
-            return (
-              <li key={item.label}>
-                <a
-                  href={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                    active
-                      ? "bg-blue-700 text-white"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-slate-900"
-                  }`}
-                >
-                  {item.icon}
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
+        <ExpandedNavList
+          items={SECONDARY_NAV_ITEMS}
+          activeHref={activeHref}
+          onNavClick={onNavClick}
+        />
       </nav>
       <div className="p-4">
         <div className="rounded-lg bg-gray-100 p-4">
@@ -123,6 +234,115 @@ export default function RoleScoutSidebar({ activeHref }: { activeHref: string })
           </p>
         </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+function CollapsedContent({
+  activeHref,
+  onExpand,
+}: {
+  activeHref: string;
+  onExpand: () => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onExpand}
+        aria-label="Expand sidebar"
+        className="flex items-center justify-center w-full py-4 text-gray-400 hover:text-slate-900 transition"
+      >
+        <IconChevronRight />
+      </button>
+      <nav className="flex-1">
+        <CollapsedNavList items={NAV_ITEMS} activeHref={activeHref} />
+        <div className="mx-3 my-2 h-px bg-gray-100" />
+        <CollapsedNavList items={SECONDARY_NAV_ITEMS} activeHref={activeHref} />
+      </nav>
+    </>
+  );
+}
+
+export default function RoleScoutSidebar({ activeHref }: { activeHref: string }) {
+  const collapsed = useSyncExternalStore(
+    subscribeCollapsed,
+    getCollapsedSnapshot,
+    getCollapsedServerSnapshot
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setMobileOpen(true);
+    window.addEventListener(OPEN_EVENT, handler);
+    return () => window.removeEventListener(OPEN_EVENT, handler);
+  }, []);
+
+  function toggleCollapse() {
+    const next = !collapsed;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(next));
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent(COLLAPSE_CHANGED_EVENT));
+  }
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside
+        className={`hidden lg:flex sticky top-[65px] h-[calc(100vh-65px)] shrink-0 flex-col border-r border-gray-200 bg-white transition-all duration-200 ${
+          collapsed ? "w-[64px]" : "w-[260px]"
+        }`}
+      >
+        {collapsed ? (
+          <CollapsedContent activeHref={activeHref} onExpand={toggleCollapse} />
+        ) : (
+          <ExpandedContent activeHref={activeHref} onCollapse={toggleCollapse} />
+        )}
+      </aside>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <>
+          <div
+            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 bg-black/30 z-40 lg:hidden"
+          />
+          <aside className="fixed top-0 left-0 h-full w-[260px] z-50 bg-white border-r border-gray-200 shadow-lg lg:hidden flex flex-col">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+              className="absolute top-4 right-4 text-gray-400 hover:text-slate-900 transition"
+            >
+              <IconClose />
+            </button>
+            <ExpandedContent
+              activeHref={activeHref}
+              onNavClick={() => setMobileOpen(false)}
+            />
+          </aside>
+        </>
+      )}
+    </>
+  );
+}
+
+export function MobileSidebarTrigger() {
+  function onClick() {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(OPEN_EVENT));
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="lg:hidden mb-6 flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-slate-900 transition"
+    >
+      <IconHamburger />
+      Menu
+    </button>
   );
 }
