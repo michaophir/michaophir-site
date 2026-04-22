@@ -1,5 +1,7 @@
 export type ApiProvider = "anthropic" | "openai" | "gemini";
 
+export const TRACKING_UPDATED_EVENT = "rolescout-tracking-updated";
+
 export const STORAGE_KEYS = {
   anthropicKey: "rolescout_api_key_anthropic",
   openaiKey: "rolescout_api_key_openai",
@@ -13,6 +15,8 @@ export const STORAGE_KEYS = {
   lastRunSummary: "rolescout_last_run_summary",
   openRolesCsv: "rolescout_open_roles_csv",
   trackingCsv: "rolescout_tracking_csv",
+  targetCompaniesCsv: "rolescout_target_companies",
+  roleFiltersCsv: "rolescout_role_filters",
 } as const;
 
 const ALL_KEYS: string[] = Object.values(STORAGE_KEYS);
@@ -156,6 +160,26 @@ export function setTrackingCsv(csv: string): void {
 }
 export function removeTrackingCsv(): void {
   removeKey(STORAGE_KEYS.trackingCsv);
+}
+
+export function getTargetCompaniesCsv(): string {
+  return getString(STORAGE_KEYS.targetCompaniesCsv);
+}
+export function setTargetCompaniesCsv(csv: string): void {
+  setString(STORAGE_KEYS.targetCompaniesCsv, csv);
+}
+export function removeTargetCompaniesCsv(): void {
+  removeKey(STORAGE_KEYS.targetCompaniesCsv);
+}
+
+export function getRoleFiltersCsv(): string {
+  return getString(STORAGE_KEYS.roleFiltersCsv);
+}
+export function setRoleFiltersCsv(csv: string): void {
+  setString(STORAGE_KEYS.roleFiltersCsv, csv);
+}
+export function removeRoleFiltersCsv(): void {
+  removeKey(STORAGE_KEYS.roleFiltersCsv);
 }
 
 export function clearAllRolescout(): void {

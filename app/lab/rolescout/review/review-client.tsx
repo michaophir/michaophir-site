@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
-import { getOpenRolesCsv, setOpenRolesCsv } from "../lib/storage";
+import { getOpenRolesCsv } from "../lib/storage";
 
-const OPEN_ROLES_UPDATED_EVENT = "rolescout-open-roles-updated";
-
-const CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?gid=1874433807&single=true&output=csv";
+const DEMO_CSV_URL =
+  "https://raw.githubusercontent.com/michaophir/sandbox/main/open_roles.csv";
 
 type Job = {
   job_id: string;
@@ -30,7 +28,6 @@ type Job = {
 type WorkplacePill = "Remote" | "Hybrid" | "Onsite";
 type DatePill = "today" | "week";
 type Action = "save" | "pass";
-type Mode = "demo" | "personal";
 
 function parseRow(raw: Record<string, unknown>): Job {
   const g = (k: string) => String(raw[k] ?? "").trim();
@@ -422,7 +419,7 @@ function ListingsTable({
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
-              <th className="whitespace-nowrap px-5 py-3 w-[80px]">Save Role</th>
+              <th className="whitespace-nowrap px-5 py-3 w-[80px]">Save</th>
               <SortableHeader
                 label="Company"
                 columnKey="company"
@@ -557,7 +554,7 @@ export default function ReviewClient() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>("demo");
+  const [isDemo, setIsDemo] = useState<boolean>(false);
   const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
   const [actions, setActions] = useState<Record<string, Action>>({});
@@ -568,38 +565,45 @@ export default function ReviewClient() {
   );
 
   useEffect(() => {
-    const loadFromStorage = () => {
-      const saved = getOpenRolesCsv();
-      if (!saved) return false;
-      const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
+    let cancelled = false;
+
+    const applyCsv = (text: string) => {
+      const result = Papa.parse(text, { header: true, skipEmptyLines: true });
       const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+      if (cancelled) return;
       setJobs(parsed.filter((j) => j.job_id));
-      setMode("personal");
-      setActions({});
-      setLoading(false);
-      return true;
     };
 
-    if (!loadFromStorage()) {
-      fetch(CSV_URL)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch data");
-          return res.text();
-        })
-        .then((text) => {
-          const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-          const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
-          setJobs(parsed.filter((j) => j.job_id));
-        })
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
+    const saved = getOpenRolesCsv();
+    if (saved) {
+      applyCsv(saved);
+      setIsDemo(false);
+      setLoading(false);
+      return;
     }
 
-    const onUpdate = () => {
-      loadFromStorage();
+    setIsDemo(true);
+    fetch(DEMO_CSV_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch data");
+        return res.text();
+      })
+      .then((text) => {
+        if (cancelled) return;
+        applyCsv(text);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
     };
-    window.addEventListener(OPEN_ROLES_UPDATED_EVENT, onUpdate);
-    return () => window.removeEventListener(OPEN_ROLES_UPDATED_EVENT, onUpdate);
   }, []);
 
   const togglePill = (pill: WorkplacePill | DatePill) => {
@@ -705,18 +709,18 @@ export default function ReviewClient() {
 
       <div>
         {/* Demo banner */}
-        {mode === "demo" && (
+        {isDemo && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span>
-              <strong>Viewing demo data</strong> — upload your own CSV to use
-              with your data
+              Viewing demo data —{" "}
+              <a
+                href="/lab/rolescout/settings"
+                className="font-medium underline decoration-amber-400 underline-offset-2 hover:text-amber-700"
+              >
+                go to Settings
+              </a>
+              {" "}to upload your own scraper output.
             </span>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-xs font-medium text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-amber-900"
-            >
-              Refresh
-            </button>
           </div>
         )}
 
@@ -780,38 +784,3 @@ export default function ReviewClient() {
   );
 }
 
-export function ReviewUploadButton() {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = String(ev.target?.result ?? "");
-      setOpenRolesCsv(text);
-      window.dispatchEvent(new CustomEvent(OPEN_ROLES_UPDATED_EVENT));
-    };
-    reader.readAsText(file);
-  }
-
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".csv"
-        onChange={onChange}
-        className="hidden"
-      />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-      >
-        Upload CSV
-      </button>
-    </>
-  );
-}

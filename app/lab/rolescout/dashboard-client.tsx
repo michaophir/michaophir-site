@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
-import { getLastRunSummary, getOpenRolesCsv, getTrackingCsv } from "./lib/storage";
+import {
+  getLastRunSummary,
+  getOpenRolesCsv,
+  getTrackingCsv,
+  TRACKING_UPDATED_EVENT,
+} from "./lib/storage";
 
 // ---------- Types ----------
 
@@ -54,6 +59,15 @@ type DisplayAction = {
 
 // ---------- Constants ----------
 
+const DEMO_SOURCES = {
+  openRolesCsv:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/open_roles.csv",
+  trackingCsv:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/tracking_sheet.csv",
+  lastRunSummary:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/last_run_summary.json",
+};
+
 const STAGES = [
   "Saved",
   "Applied",
@@ -63,42 +77,6 @@ const STAGES = [
   "Final Round",
   "Offer",
 ] as const;
-
-const TOP_MATCHES_DEMO: DisplayMatch[] = [
-  { role: "Senior Frontend Engineer", company: "Stripe", match: 92 },
-  { role: "Staff Software Engineer", company: "Figma", match: 88 },
-];
-
-const UPCOMING_ACTIONS_DEMO: DisplayAction[] = [
-  {
-    role: "Senior Software Engineer",
-    company: "Notion",
-    stage: "Technical",
-    action: "System design interview",
-    date: "Apr 17",
-  },
-  {
-    role: "Staff Engineer, Frontend",
-    company: "Linear",
-    stage: "Phone Interview",
-    action: "Technical phone screen",
-    date: "Apr 15",
-  },
-  {
-    role: "Engineering Lead",
-    company: "Loom",
-    stage: "Applied",
-    action: "Wait for recruiter response",
-    date: null,
-  },
-  {
-    role: "Senior Full Stack Engineer",
-    company: "Retool",
-    stage: "Screening",
-    action: "Recruiter call scheduled",
-    date: "Apr 14",
-  },
-];
 
 // ---------- Parsing ----------
 
@@ -356,11 +334,63 @@ export default function DashboardClient() {
   const [summaryRaw, setSummaryRaw] = useState<string>("");
   const [trackingRaw, setTrackingRaw] = useState<string>("");
   const [openRolesRaw, setOpenRolesRaw] = useState<string>("");
+  const [summaryIsDemo, setSummaryIsDemo] = useState<boolean>(false);
+  const [trackingIsDemo, setTrackingIsDemo] = useState<boolean>(false);
+  const [openRolesIsDemo, setOpenRolesIsDemo] = useState<boolean>(false);
 
   useEffect(() => {
-    setSummaryRaw(getLastRunSummary());
-    setTrackingRaw(getTrackingCsv());
-    setOpenRolesRaw(getOpenRolesCsv());
+    let cancelled = false;
+
+    const savedSummary = getLastRunSummary();
+    const savedTracking = getTrackingCsv();
+    const savedOpenRoles = getOpenRolesCsv();
+
+    if (savedSummary) setSummaryRaw(savedSummary);
+    if (savedTracking) setTrackingRaw(savedTracking);
+    if (savedOpenRoles) setOpenRolesRaw(savedOpenRoles);
+
+    const fetchDemo = (
+      url: string,
+      setRaw: (text: string) => void,
+      setIsDemo: (v: boolean) => void
+    ) => {
+      setIsDemo(true);
+      fetch(url)
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.text();
+        })
+        .then((text) => {
+          if (cancelled) return;
+          setRaw(text);
+        })
+        .catch(() => {
+          // Fetch failed; panel renders its empty state.
+        });
+    };
+
+    if (!savedSummary) {
+      fetchDemo(DEMO_SOURCES.lastRunSummary, setSummaryRaw, setSummaryIsDemo);
+    }
+    if (!savedTracking) {
+      fetchDemo(DEMO_SOURCES.trackingCsv, setTrackingRaw, setTrackingIsDemo);
+    }
+    if (!savedOpenRoles) {
+      fetchDemo(DEMO_SOURCES.openRolesCsv, setOpenRolesRaw, setOpenRolesIsDemo);
+    }
+
+    const onTrackingUpdated = () => {
+      const latest = getTrackingCsv();
+      if (!latest) return;
+      setTrackingRaw(latest);
+      setTrackingIsDemo(false);
+    };
+    window.addEventListener(TRACKING_UPDATED_EVENT, onTrackingUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TRACKING_UPDATED_EVENT, onTrackingUpdated);
+    };
   }, []);
 
   const summary = useMemo(() => parseSummary(summaryRaw), [summaryRaw]);
@@ -384,7 +414,7 @@ export default function DashboardClient() {
   const hasSummary = summary !== null;
   const hasTracking = trackingRaw !== "";
   const hasOpenRoles = openRolesRaw !== "";
-  const showDemoBanner = summaryRaw === "" && trackingRaw === "";
+  const showDemoBanner = summaryIsDemo || trackingIsDemo || openRolesIsDemo;
 
   const totalApplications = aggregatedJobs.length;
   const activeCount = aggregatedJobs.filter((j) => j.state === "Active").length;
@@ -394,7 +424,7 @@ export default function DashboardClient() {
   const savedCount = aggregatedJobs.filter((j) => j.currentStage === "Saved").length;
 
   const topMatches: DisplayMatch[] = useMemo(() => {
-    if (!hasOpenRoles) return TOP_MATCHES_DEMO;
+    if (!hasOpenRoles) return [];
     return openRoles
       .filter((r) => r.match_score !== null)
       .sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0))
@@ -407,7 +437,7 @@ export default function DashboardClient() {
   }, [openRoles, hasOpenRoles]);
 
   const upcomingActions: DisplayAction[] = useMemo(() => {
-    if (!hasTracking) return UPCOMING_ACTIONS_DEMO;
+    if (!hasTracking) return [];
     return aggregatedJobs
       .filter((j) => j.state === "Active" && j.nextAction)
       .sort((a, b) => {
@@ -425,9 +455,12 @@ export default function DashboardClient() {
       }));
   }, [aggregatedJobs, hasTracking]);
 
-  const topMatchesSubtitle = summary?.run_date
+  const runDateText = summary?.run_date
     ? `Last run: ${formatLongDate(summary.run_date)}`
     : "From your last scraper run";
+  const topMatchesSubtitle = openRolesIsDemo
+    ? `Demo data · ${runDateText}`
+    : runDateText;
 
   const sectionLabelClass =
     "text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3";
@@ -435,8 +468,17 @@ export default function DashboardClient() {
   return (
     <>
       {showDemoBanner && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Viewing demo data — upload your scraper CSV and tracking CSV to see real stats.
+        <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>
+            Viewing demo data —{" "}
+            <a
+              href="/lab/rolescout/settings"
+              className="font-medium underline decoration-amber-400 underline-offset-2 hover:text-amber-700"
+            >
+              go to Settings
+            </a>
+            {" "}to upload your own files.
+          </span>
         </div>
       )}
 

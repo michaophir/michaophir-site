@@ -13,6 +13,8 @@ import {
   getOpenAIKey,
   getOpenAIModel,
   getOpenRolesCsv,
+  getRoleFiltersCsv,
+  getTargetCompaniesCsv,
   getTrackingCsv,
   removeAnthropicKey,
   removeCandidateProfile,
@@ -20,6 +22,8 @@ import {
   removeLastRunSummary,
   removeOpenAIKey,
   removeOpenRolesCsv,
+  removeRoleFiltersCsv,
+  removeTargetCompaniesCsv,
   removeTrackingCsv,
   setAnthropicKey,
   setAnthropicModel,
@@ -30,8 +34,26 @@ import {
   setOpenAIKey,
   setOpenAIModel,
   setOpenRolesCsv,
+  setRoleFiltersCsv,
+  setTargetCompaniesCsv,
   setTrackingCsv,
+  TRACKING_UPDATED_EVENT,
 } from "../lib/storage";
+
+const DEMO_SOURCES = {
+  candidateProfile:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/candidate_profile.json",
+  openRolesCsv:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/open_roles.csv",
+  trackingCsv:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/tracking_sheet.csv",
+  lastRunSummary:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/last_run_summary.json",
+  targetCompanies:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/target_company_list.csv",
+  roleFilters:
+    "https://raw.githubusercontent.com/michaophir/sandbox/main/role_filters.csv",
+};
 
 type ModelOption = {
   value: string;
@@ -126,6 +148,8 @@ type DataRawState = {
   openRolesCsv: string;
   trackingCsv: string;
   lastRunSummary: string;
+  targetCompaniesCsv: string;
+  roleFiltersCsv: string;
 };
 
 const EMPTY_DATA_RAW: DataRawState = {
@@ -133,6 +157,8 @@ const EMPTY_DATA_RAW: DataRawState = {
   openRolesCsv: "",
   trackingCsv: "",
   lastRunSummary: "",
+  targetCompaniesCsv: "",
+  roleFiltersCsv: "",
 };
 
 function readAllDataRaw(): DataRawState {
@@ -141,6 +167,8 @@ function readAllDataRaw(): DataRawState {
     openRolesCsv: getOpenRolesCsv(),
     trackingCsv: getTrackingCsv(),
     lastRunSummary: getLastRunSummary(),
+    targetCompaniesCsv: getTargetCompaniesCsv(),
+    roleFiltersCsv: getRoleFiltersCsv(),
   };
 }
 
@@ -197,6 +225,8 @@ export default function SettingsClient() {
   const [clearedMessage, setClearedMessage] = useState(false);
   const [models, setModels] = useState<KeysState>(defaultModels());
   const [dataRaw, setDataRaw] = useState<DataRawState>(EMPTY_DATA_RAW);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setSavedKeys(readAllKeys());
@@ -241,6 +271,42 @@ export default function SettingsClient() {
     removeOpenAIKey();
     removeGeminiKey();
     refreshKeys();
+  }
+
+  async function handleLoadDemo() {
+    setDemoLoading(true);
+    setDemoStatus(null);
+    try {
+      const [candidate, openRoles, tracking, lastRun, companies, filters] =
+        await Promise.all([
+          fetch(DEMO_SOURCES.candidateProfile).then((r) => r.text()),
+          fetch(DEMO_SOURCES.openRolesCsv).then((r) => r.text()),
+          fetch(DEMO_SOURCES.trackingCsv).then((r) => r.text()),
+          fetch(DEMO_SOURCES.lastRunSummary).then((r) => r.text()),
+          fetch(DEMO_SOURCES.targetCompanies).then((r) => r.text()),
+          fetch(DEMO_SOURCES.roleFilters).then((r) => r.text()),
+        ]);
+
+      JSON.parse(candidate);
+      JSON.parse(lastRun);
+
+      setCandidateProfile(candidate);
+      setOpenRolesCsv(openRoles);
+      setTrackingCsv(tracking);
+      setLastRunSummary(lastRun);
+      setTargetCompaniesCsv(companies);
+      setRoleFiltersCsv(filters);
+
+      window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
+
+      refreshData();
+      setDemoStatus("Demo data loaded successfully.");
+      window.setTimeout(() => setDemoStatus(null), 3000);
+    } catch {
+      setDemoStatus("error");
+    } finally {
+      setDemoLoading(false);
+    }
   }
 
   function handleClearAll() {
@@ -422,10 +488,39 @@ export default function SettingsClient() {
           All RoleScout data lives in your browser&apos;s localStorage. Clear individual items or wipe everything.
         </p>
 
+        <div className="mb-6 pb-6 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Demo data</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Populate all fields with sample data from RoleScout
+              </p>
+            </div>
+            <button
+              onClick={handleLoadDemo}
+              disabled={demoLoading}
+              className="rounded-full border border-gray-200 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-gray-50 transition disabled:opacity-50"
+            >
+              {demoLoading ? "Loading..." : "Load demo data"}
+            </button>
+          </div>
+          {demoStatus && (
+            <p
+              className={`text-xs mt-2 ${
+                demoStatus === "error" ? "text-red-500" : "text-green-600"
+              }`}
+            >
+              {demoStatus === "error"
+                ? "Failed to load some demo data."
+                : demoStatus}
+            </p>
+          )}
+        </div>
+
         <div>
           <DataItem
             name="Candidate Profile"
-            description="Resume and parsed profile JSON"
+            description="Skills, experience, and target roles"
             statusPresent={dataRaw.candidateProfile !== ""}
             statusText={dataRaw.candidateProfile !== "" ? "Saved" : "Empty"}
             upload={{
@@ -439,6 +534,7 @@ export default function SettingsClient() {
               refreshData();
             }}
             onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.candidateProfile}
           />
           <DataItem
             name="Open Roles CSV"
@@ -460,6 +556,7 @@ export default function SettingsClient() {
               refreshData();
             }}
             onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.openRolesCsv}
           />
           <DataItem
             name="Tracking CSV"
@@ -474,13 +571,17 @@ export default function SettingsClient() {
               label: "Upload CSV",
               accept: ".csv",
               validateAsJson: false,
-              onText: (text) => setTrackingCsv(text),
+              onText: (text) => {
+                setTrackingCsv(text);
+                window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
+              },
             }}
             onClear={() => {
               removeTrackingCsv();
               refreshData();
             }}
             onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.trackingCsv}
           />
           <DataItem
             name="Last Run Summary"
@@ -502,6 +603,51 @@ export default function SettingsClient() {
               refreshData();
             }}
             onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.lastRunSummary}
+          />
+          <DataItem
+            name="Target Companies"
+            description="Company list for the scraper"
+            statusPresent={dataRaw.targetCompaniesCsv !== ""}
+            statusText={
+              dataRaw.targetCompaniesCsv !== ""
+                ? `${countCsvRows(dataRaw.targetCompaniesCsv)} companies`
+                : "Empty"
+            }
+            upload={{
+              label: "Upload CSV",
+              accept: ".csv",
+              validateAsJson: false,
+              onText: (text) => setTargetCompaniesCsv(text),
+            }}
+            onClear={() => {
+              removeTargetCompaniesCsv();
+              refreshData();
+            }}
+            onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.targetCompanies}
+          />
+          <DataItem
+            name="Role Filters"
+            description="Title, seniority, domain and skill filters"
+            statusPresent={dataRaw.roleFiltersCsv !== ""}
+            statusText={
+              dataRaw.roleFiltersCsv !== ""
+                ? `${countCsvRows(dataRaw.roleFiltersCsv)} filters`
+                : "Empty"
+            }
+            upload={{
+              label: "Upload CSV",
+              accept: ".csv",
+              validateAsJson: false,
+              onText: (text) => setRoleFiltersCsv(text),
+            }}
+            onClear={() => {
+              removeRoleFiltersCsv();
+              refreshData();
+            }}
+            onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.roleFilters}
           />
           <DataItem
             name="API Keys"
@@ -542,6 +688,7 @@ function DataItem({
   upload,
   onClear,
   onAfterUpload,
+  sampleHref,
 }: {
   name: string;
   description: string;
@@ -550,6 +697,7 @@ function DataItem({
   upload?: UploadConfig;
   onClear?: () => void;
   onAfterUpload?: () => void;
+  sampleHref?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -615,6 +763,15 @@ function DataItem({
               className="hidden"
             />
           </>
+        )}
+        {sampleHref && (
+          <a
+            href={sampleHref}
+            download
+            className="text-xs text-gray-400 hover:text-slate-700 underline ml-2"
+          >
+            Sample
+          </a>
         )}
         {statusPresent && onClear && (
           <button

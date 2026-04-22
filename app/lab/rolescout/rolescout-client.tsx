@@ -1,19 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
-import { getTrackingCsv, setTrackingCsv } from "./lib/storage";
-
-const TRACKING_UPDATED_EVENT = "rolescout-tracking-updated";
+import { getTrackingCsv, TRACKING_UPDATED_EVENT } from "./lib/storage";
 
 const DEMO_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vT9bo-ccxwhizXfznQYncJWkuGQhnFKbE6mwJBEHOjFPCZLjuWiIeiFMI6_7yp3v7vYawRgJKHZqiCE/pub?output=csv";
-
-const SAMPLE_CSV = `Job ID,Company,Role,Person,Date,Event,Source,Stage,State,Compensation,Location,Next Action,Next Action Date,Notes,Job URL
-JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-15,Applied,LinkedIn,Applied,Active,280000-320000,San Francisco CA,,,,https://anthropic.com/careers/JOB-001
-JOB-001,Anthropic,Senior Product Manager,Sarah Chen,2026-03-25,Recruiter Screen,LinkedIn,Recruiter Screen,Active,280000-320000,San Francisco CA,Prep for HM interview,2026-04-15,,https://anthropic.com/careers/JOB-001
-JOB-002,Stripe,Principal PM Payments,N/A,2026-03-20,Applied,Direct,Applied,Rejected,250000-290000,Remote,,,,https://stripe.com/jobs/JOB-002
-`;
+  "https://raw.githubusercontent.com/michaophir/sandbox/main/tracking_sheet.csv";
 
 const STAGES = [
   "Saved",
@@ -159,8 +151,6 @@ type AggregatedJob = {
   isExit: boolean;
   reachedApplied: boolean;
 };
-
-type Mode = "demo" | "personal";
 
 function parseRow(raw: Record<string, unknown>): Row {
   const get = (key: string) => String(raw[key] ?? "").trim();
@@ -678,7 +668,7 @@ function daysBetween(a: Date, b: Date): number {
 type NextActionFilter = "all" | "overdue" | "today" | "week";
 
 export default function RoleScoutClient() {
-  const [mode, setMode] = useState<Mode>("demo");
+  const [isDemo, setIsDemo] = useState<boolean>(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -709,7 +699,7 @@ export default function RoleScoutClient() {
       const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
       const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
       setRows(parsed);
-      setMode("personal");
+      setIsDemo(false);
       setLoading(false);
       return true;
     };
@@ -718,6 +708,7 @@ export default function RoleScoutClient() {
     setError(null);
 
     if (!loadFromStorage()) {
+      setIsDemo(true);
       fetch(DEMO_CSV_URL)
         .then((r) => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -821,18 +812,18 @@ export default function RoleScoutClient() {
     <div>
       <div>
         {/* Demo banner */}
-        {mode === "demo" && (
+        {isDemo && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span>
-              <strong>Viewing demo data</strong> — upload your own CSV to use
-              with your data
+              Viewing demo data —{" "}
+              <a
+                href="/lab/rolescout/settings"
+                className="font-medium underline decoration-amber-400 underline-offset-2 hover:text-amber-700"
+              >
+                go to Settings
+              </a>
+              {" "}to upload your own tracking data.
             </span>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-xs font-medium text-amber-700 underline decoration-amber-300 underline-offset-4 transition hover:text-amber-900"
-            >
-              Refresh
-            </button>
           </div>
         )}
 
@@ -1246,57 +1237,3 @@ function FilterSelect({
   );
 }
 
-export function ApplicationsActions() {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = String(ev.target?.result ?? "");
-      setTrackingCsv(text);
-      window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
-    };
-    reader.readAsText(file);
-  }
-
-  function downloadSample() {
-    const blob = new Blob([SAMPLE_CSV], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "rolescout-sample.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <div className="flex items-center gap-4">
-      <button
-        type="button"
-        onClick={downloadSample}
-        className="text-sm font-medium text-gray-500 underline decoration-gray-300 underline-offset-4 transition hover:text-slate-900 hover:decoration-slate-900"
-      >
-        Download sample CSV
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".csv"
-        onChange={onChange}
-        className="hidden"
-      />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-      >
-        Upload CSV
-      </button>
-    </div>
-  );
-}
