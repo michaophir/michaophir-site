@@ -19,9 +19,6 @@ export default function Navbar() {
             <a href="/lab" className="transition hover:text-gray-900">
               The Lab
             </a>
-            <a href="#ai-run" className="transition hover:text-gray-900">
-              AI-Run Company
-            </a>
           </div>
           <a
             href="https://cal.com/michaophir/30min"

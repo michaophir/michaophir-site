@@ -32,9 +32,9 @@ const PLANNED: Experiment[] = [
     href: null,
   },
   {
-    title: "Candidate Profile",
+    title: "Agentic Hedge Fund",
     description:
-      "Resume, skills, and story bank for smarter job matching.",
+      "Autonomous trading agents researching theses and managing positions, built in public.",
     status: "Planned",
     href: null,
   },

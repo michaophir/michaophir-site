@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 type NavItem = {
@@ -126,20 +128,20 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
 
 function ExpandedNavList({
   items,
-  activeHref,
+  pathname,
   onNavClick,
 }: {
   items: NavItem[];
-  activeHref: string;
+  pathname: string;
   onNavClick?: () => void;
 }) {
   return (
     <ul className="space-y-1">
       {items.map((item) => {
-        const active = item.href === activeHref;
+        const active = item.href === pathname;
         return (
           <li key={item.label}>
-            <a
+            <Link
               href={item.href}
               onClick={onNavClick}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
@@ -150,7 +152,7 @@ function ExpandedNavList({
             >
               {item.icon}
               {item.label}
-            </a>
+            </Link>
           </li>
         );
       })}
@@ -160,18 +162,18 @@ function ExpandedNavList({
 
 function CollapsedNavList({
   items,
-  activeHref,
+  pathname,
 }: {
   items: NavItem[];
-  activeHref: string;
+  pathname: string;
 }) {
   return (
     <ul className="flex flex-col items-center space-y-1">
       {items.map((item) => {
-        const active = item.href === activeHref;
+        const active = item.href === pathname;
         return (
           <li key={item.label}>
-            <a
+            <Link
               href={item.href}
               title={item.label}
               aria-label={item.label}
@@ -182,7 +184,7 @@ function CollapsedNavList({
               }`}
             >
               {item.icon}
-            </a>
+            </Link>
           </li>
         );
       })}
@@ -191,11 +193,11 @@ function CollapsedNavList({
 }
 
 function ExpandedContent({
-  activeHref,
+  pathname,
   onNavClick,
   onCollapse,
 }: {
-  activeHref: string;
+  pathname: string;
   onNavClick?: () => void;
   onCollapse?: () => void;
 }) {
@@ -218,11 +220,11 @@ function ExpandedContent({
         )}
       </div>
       <nav className="flex-1 px-3">
-        <ExpandedNavList items={NAV_ITEMS} activeHref={activeHref} onNavClick={onNavClick} />
+        <ExpandedNavList items={NAV_ITEMS} pathname={pathname} onNavClick={onNavClick} />
         <div className="mx-3 my-2 h-px bg-gray-100" />
         <ExpandedNavList
           items={SECONDARY_NAV_ITEMS}
-          activeHref={activeHref}
+          pathname={pathname}
           onNavClick={onNavClick}
         />
       </nav>
@@ -239,10 +241,10 @@ function ExpandedContent({
 }
 
 function CollapsedContent({
-  activeHref,
+  pathname,
   onExpand,
 }: {
-  activeHref: string;
+  pathname: string;
   onExpand: () => void;
 }) {
   return (
@@ -256,23 +258,26 @@ function CollapsedContent({
         <IconChevronRight />
       </button>
       <nav className="flex-1">
-        <CollapsedNavList items={NAV_ITEMS} activeHref={activeHref} />
+        <CollapsedNavList items={NAV_ITEMS} pathname={pathname} />
         <div className="mx-3 my-2 h-px bg-gray-100" />
-        <CollapsedNavList items={SECONDARY_NAV_ITEMS} activeHref={activeHref} />
+        <CollapsedNavList items={SECONDARY_NAV_ITEMS} pathname={pathname} />
       </nav>
     </>
   );
 }
 
-export default function RoleScoutSidebar({ activeHref }: { activeHref: string }) {
+export default function RoleScoutSidebar() {
+  const pathname = usePathname() ?? "";
   const collapsed = useSyncExternalStore(
     subscribeCollapsed,
     getCollapsedSnapshot,
     getCollapsedServerSnapshot
   );
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    setHydrated(true);
     const handler = () => setMobileOpen(true);
     window.addEventListener(OPEN_EVENT, handler);
     return () => window.removeEventListener(OPEN_EVENT, handler);
@@ -292,14 +297,14 @@ export default function RoleScoutSidebar({ activeHref }: { activeHref: string })
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`hidden lg:flex sticky top-[65px] h-[calc(100vh-65px)] shrink-0 flex-col border-r border-gray-200 bg-white transition-all duration-200 ${
-          collapsed ? "w-[64px]" : "w-[260px]"
-        }`}
+        className={`hidden lg:flex sticky top-[65px] h-[calc(100vh-65px)] shrink-0 flex-col border-r border-gray-200 bg-white ${
+          hydrated ? "transition-all duration-200" : ""
+        } ${collapsed ? "w-[64px]" : "w-[260px]"}`}
       >
         {collapsed ? (
-          <CollapsedContent activeHref={activeHref} onExpand={toggleCollapse} />
+          <CollapsedContent pathname={pathname} onExpand={toggleCollapse} />
         ) : (
-          <ExpandedContent activeHref={activeHref} onCollapse={toggleCollapse} />
+          <ExpandedContent pathname={pathname} onCollapse={toggleCollapse} />
         )}
       </aside>
 
@@ -320,7 +325,7 @@ export default function RoleScoutSidebar({ activeHref }: { activeHref: string })
               <IconClose />
             </button>
             <ExpandedContent
-              activeHref={activeHref}
+              pathname={pathname}
               onNavClick={() => setMobileOpen(false)}
             />
           </aside>
