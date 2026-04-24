@@ -60,20 +60,6 @@ function parseCsv<T>(text: string, mapper: (row: Record<string, string>) => T): 
   return (result.data as Record<string, string>[]).map(mapper);
 }
 
-function parseLocalDate(iso: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function formatShortDate(iso: string): string {
-  const d = parseLocalDate(iso);
-  if (!d) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-
 // ---------- Shared UI ----------
 
 function SectionCard({
@@ -439,11 +425,26 @@ function LastRunSummarySection() {
 
   const companiesFailed = data?.companiesFailed ?? 0;
 
+  const runDate = data?.runDate ? new Date(data.runDate) : null;
+  const validRunDate = runDate && !isNaN(runDate.getTime()) ? runDate : null;
+  const dateStr = validRunDate
+    ? validRunDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+  const timeStr = validRunDate
+    ? validRunDate.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+
   return (
     <section className="mb-6">
       <h3 className="text-base font-semibold text-slate-900">Last Run Summary</h3>
       <p className="text-sm text-gray-500 mb-4">
-        {data?.runDate ? `Completed ${data.runDate}` : "No run yet"}
+        {validRunDate ? `Completed ${dateStr} at ${timeStr}` : "No run yet"}
       </p>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
@@ -473,10 +474,10 @@ function LastRunSummarySection() {
           icon={<IconCalendar />}
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
-          value={data?.runDate ? formatShortDate(data.runDate) : "—"}
+          value={dateStr}
           subValue={
             data
-              ? `${data.companiesSucceeded}/${data.companiesTotal} companies`
+              ? `${timeStr} · ${data.companiesSucceeded}/${data.companiesTotal} companies`
               : undefined
           }
           label="Last Run"

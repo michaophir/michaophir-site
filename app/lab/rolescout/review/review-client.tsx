@@ -26,8 +26,7 @@ type Job = {
 };
 
 type WorkplacePill = "Remote" | "Hybrid" | "Onsite";
-type DatePill = "today" | "week";
-type Action = "save" | "pass";
+type DatePill = "week";
 
 function parseRow(raw: Record<string, unknown>): Job {
   const g = (k: string) => String(raw[k] ?? "").trim();
@@ -83,21 +82,13 @@ function isWithinLastWeek(dateStr: string): boolean {
   return d >= weekAgo;
 }
 
-function isToday(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
-}
-
 const WORKPLACE_PILLS: { value: WorkplacePill; label: string }[] = [
   { value: "Remote", label: "Remote" },
   { value: "Hybrid", label: "Hybrid" },
   { value: "Onsite", label: "Onsite" },
 ];
 const DATE_PILLS: { value: DatePill; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "week", label: "This Week" },
+  { value: "week", label: "New This Week" },
 ];
 
 // ---------- Components ----------
@@ -105,15 +96,22 @@ const DATE_PILLS: { value: DatePill; label: string }[] = [
 function FilterBar({
   activeWorkplace,
   activeDates,
+  locationFilter,
+  setLocationFilter,
   toggle,
   clearAll,
 }: {
   activeWorkplace: Set<WorkplacePill>;
   activeDates: Set<DatePill>;
+  locationFilter: string;
+  setLocationFilter: (v: string) => void;
   toggle: (pill: WorkplacePill | DatePill) => void;
   clearAll: () => void;
 }) {
-  const noneActive = activeWorkplace.size === 0 && activeDates.size === 0;
+  const noneActive =
+    activeWorkplace.size === 0 &&
+    activeDates.size === 0 &&
+    locationFilter.trim() === "";
 
   const pill = (
     label: string,
@@ -136,83 +134,84 @@ function FilterBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {pill("All", noneActive, clearAll)}
-      {WORKPLACE_PILLS.map((p) =>
-        pill(p.label, activeWorkplace.has(p.value), () => toggle(p.value))
-      )}
       {DATE_PILLS.map((p) =>
         pill(p.label, activeDates.has(p.value), () => toggle(p.value))
       )}
+      {WORKPLACE_PILLS.map((p) =>
+        pill(p.label, activeWorkplace.has(p.value), () => toggle(p.value))
+      )}
+      <input
+        type="text"
+        value={locationFilter}
+        onChange={(e) => setLocationFilter(e.target.value)}
+        placeholder="Filter by location..."
+        className="ml-3 w-48 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm text-slate-700 placeholder-gray-400 focus:border-slate-400 focus:outline-none"
+      />
     </div>
   );
 }
 
-function ActionButtons({
+function BookmarkIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z"
+      />
+    </svg>
+  );
+}
+
+function SaveBookmarkButton({
   jobId,
-  actions,
-  onAction,
+  savedIds,
+  onToggle,
 }: {
   jobId: string;
-  actions: Record<string, Action>;
-  onAction: (id: string, a: Action) => void;
+  savedIds: Set<string>;
+  onToggle: (id: string) => void;
 }) {
-  const current = actions[jobId];
+  const saved = savedIds.has(jobId);
   return (
-    <div className="flex items-center gap-1.5">
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onAction(jobId, "save");
-        }}
-        className={`text-sm font-semibold transition ${
-          current === "save"
-            ? "text-emerald-600 scale-110"
-            : "text-emerald-500 opacity-60 hover:opacity-100"
-        }`}
-        title="Save"
-      >
-        ✓
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onAction(jobId, "pass");
-        }}
-        className={`text-sm font-semibold transition ${
-          current === "pass"
-            ? "text-red-500 scale-110"
-            : "text-red-400 opacity-60 hover:opacity-100"
-        }`}
-        title="Pass"
-      >
-        ✗
-      </button>
-    </div>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(jobId);
+      }}
+      className={`transition ${
+        saved ? "text-blue-600" : "text-gray-300 hover:text-blue-600"
+      }`}
+      title={saved ? "Saved" : "Save role"}
+    >
+      <BookmarkIcon filled={saved} />
+    </button>
   );
 }
 
 function JobCard({
   job,
-  actions,
-  onAction,
+  savedIds,
+  onToggle,
   showMatchScore,
 }: {
   job: Job;
-  actions: Record<string, Action>;
-  onAction: (id: string, a: Action) => void;
+  savedIds: Set<string>;
+  onToggle: (id: string) => void;
   showMatchScore?: boolean;
 }) {
-  const state = actions[job.job_id];
-  const isSaved = state === "save";
-  const isPassed = state === "pass";
+  const isSaved = savedIds.has(job.job_id);
 
   return (
     <div
       className={`flex flex-col justify-between rounded-xl border p-5 shadow-sm transition hover:shadow-md ${
-        isSaved
-          ? "border-emerald-300 bg-white"
-          : isPassed
-          ? "border-gray-200 bg-gray-50 opacity-50"
-          : "border-gray-100 bg-white"
+        isSaved ? "border-blue-200 bg-blue-50/30" : "border-gray-100 bg-white"
       }`}
     >
       <div>
@@ -225,7 +224,11 @@ function JobCard({
             )}
             <p className="text-xs font-medium text-gray-400">{job.company}</p>
           </div>
-          <ActionButtons jobId={job.job_id} actions={actions} onAction={onAction} />
+          <SaveBookmarkButton
+            jobId={job.job_id}
+            savedIds={savedIds}
+            onToggle={onToggle}
+          />
         </div>
         <h3 className="mb-2 text-[15px] font-semibold leading-snug text-slate-900">
           {job.job_title}
@@ -276,14 +279,14 @@ function SectionHeader({ title }: { title: string }) {
 function CardGrid({
   title,
   jobs,
-  actions,
-  onAction,
+  savedIds,
+  onToggle,
   showMatchScore,
 }: {
   title: string;
   jobs: Job[];
-  actions: Record<string, Action>;
-  onAction: (id: string, a: Action) => void;
+  savedIds: Set<string>;
+  onToggle: (id: string) => void;
   showMatchScore?: boolean;
 }) {
   if (jobs.length === 0) return null;
@@ -295,8 +298,8 @@ function CardGrid({
           <JobCard
             key={job.job_id}
             job={job}
-            actions={actions}
-            onAction={onAction}
+            savedIds={savedIds}
+            onToggle={onToggle}
             showMatchScore={showMatchScore}
           />
         ))}
@@ -306,11 +309,41 @@ function CardGrid({
 }
 
 function DescriptionTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const hasText = text.trim().length > 0;
   return (
     <td className="px-5 py-3 text-gray-500">
-      <div className="line-clamp-2 cursor-default" title={text || undefined}>
-        {text}
-      </div>
+      <button
+        type="button"
+        onClick={() => hasText && setOpen(true)}
+        disabled={!hasText}
+        className="line-clamp-2 w-full cursor-pointer text-left hover:text-slate-700 disabled:cursor-default disabled:hover:text-gray-500"
+      >
+        {text || "—"}
+      </button>
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[60vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+          >
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="absolute right-3 top-3 text-gray-400 transition hover:text-slate-900"
+            >
+              ✕
+            </button>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+              {text}
+            </p>
+          </div>
+        </div>
+      )}
     </td>
   );
 }
@@ -355,12 +388,12 @@ function SortableHeader({
 
 function ListingsTable({
   jobs,
-  actions,
-  onAction,
+  savedIds,
+  onToggle,
 }: {
   jobs: Job[];
-  actions: Record<string, Action>;
-  onAction: (id: string, a: Action) => void;
+  savedIds: Set<string>;
+  onToggle: (id: string) => void;
 }) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -416,16 +449,31 @@ function ListingsTable({
     <section>
       <SectionHeader title="All Listings" />
       <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
+        <table className="w-full table-fixed text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
-              <th className="whitespace-nowrap px-5 py-3 w-[80px]">Save</th>
+              <th className="px-5 py-3 w-10" aria-label="Save">
+                <svg
+                  className="h-4 w-4 text-gray-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z"
+                  />
+                </svg>
+              </th>
               <SortableHeader
                 label="Company"
                 columnKey="company"
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onClick={handleSort}
+                className="w-32"
               />
               <SortableHeader
                 label="Role"
@@ -435,51 +483,56 @@ function ListingsTable({
                 onClick={handleSort}
               />
               <SortableHeader
-                label="Match Score"
+                label="Match"
                 columnKey="match_score"
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onClick={handleSort}
-                className="whitespace-nowrap"
+                className="w-24 whitespace-nowrap"
               />
-              <th className="whitespace-nowrap px-5 py-3">Job URL</th>
+              <th className="px-5 py-3 w-20">URL</th>
               <SortableHeader
                 label="Comp Range"
                 columnKey="compensation"
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onClick={handleSort}
-                className="whitespace-nowrap"
+                className="w-32 whitespace-nowrap"
               />
-              <th className="px-5 py-3 w-[360px]">Location</th>
-              <th className="px-5 py-3 w-[280px]">Description</th>
+              <th className="px-5 py-3 w-36">Location</th>
+              <th className="px-5 py-3 w-40">Description</th>
             </tr>
           </thead>
           <tbody>
             {sortedJobs.map((job) => {
-              const rowState = actions[job.job_id];
+              const isSaved = savedIds.has(job.job_id);
               return (
               <tr
                 key={job.job_id}
                 className={`border-b border-gray-50 transition ${
-                  rowState === "save"
-                    ? "bg-emerald-50/40"
-                    : rowState === "pass"
-                    ? "opacity-40"
-                    : "hover:bg-gray-50/50"
+                  isSaved ? "bg-blue-50/40" : "hover:bg-gray-50/50"
                 }`}
               >
                 <td className="px-5 py-3">
-                  <ActionButtons
+                  <SaveBookmarkButton
                     jobId={job.job_id}
-                    actions={actions}
-                    onAction={onAction}
+                    savedIds={savedIds}
+                    onToggle={onToggle}
                   />
                 </td>
-                <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-900">
+                <td className="truncate px-5 py-3 font-medium text-slate-900" title={job.company || undefined}>
                   {job.company}
                 </td>
-                <td className="whitespace-nowrap px-5 py-3 text-slate-700">
+                <td
+                  className="px-5 py-3 text-slate-700"
+                  style={{
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                  title={job.job_title || undefined}
+                >
                   {job.job_title}
                 </td>
                 <td className="whitespace-nowrap px-5 py-3">
@@ -507,10 +560,7 @@ function ListingsTable({
                   {formatCompShort(job.compensation_raw)}
                 </td>
                 <td className="px-5 py-3 text-gray-500">
-                  <div
-                    className="w-[360px] truncate"
-                    title={job.location || undefined}
-                  >
+                  <div className="truncate" title={job.location || undefined}>
                     {job.location || "—"}
                   </div>
                 </td>
@@ -525,8 +575,8 @@ function ListingsTable({
   );
 }
 
-function downloadSavedCsv(jobs: Job[], actions: Record<string, Action>) {
-  const saved = jobs.filter((j) => actions[j.job_id] === "save");
+function downloadSavedCsv(jobs: Job[], savedIds: Set<string>) {
+  const saved = jobs.filter((j) => savedIds.has(j.job_id));
   if (saved.length === 0) return;
   const today = new Date().toISOString().split("T")[0];
   const header = [
@@ -557,12 +607,10 @@ export default function ReviewClient() {
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
-  const [actions, setActions] = useState<Record<string, Action>>({});
+  const [locationFilter, setLocationFilter] = useState("");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
-  const savedCount = useMemo(
-    () => Object.values(actions).filter((a) => a === "save").length,
-    [actions]
-  );
+  const savedCount = savedIds.size;
 
   useEffect(() => {
     let cancelled = false;
@@ -627,21 +675,20 @@ export default function ReviewClient() {
   const clearAll = () => {
     setActiveWorkplace(new Set());
     setActiveDates(new Set());
+    setLocationFilter("");
   };
 
-  const handleAction = (id: string, action: Action) => {
-    setActions((prev) => {
-      const next = { ...prev };
-      if (next[id] === action) {
-        delete next[id];
-      } else {
-        next[id] = action;
-      }
+  const toggleSave = (id: string) => {
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const filtered = useMemo(() => {
+    const loc = locationFilter.trim().toLowerCase();
     return jobs.filter((j) => {
       if (activeWorkplace.size > 0) {
         const wt = j.workplace_type.toLowerCase();
@@ -651,15 +698,15 @@ export default function ReviewClient() {
           (activeWorkplace.has("Onsite") && ["onsite", "on-site", "in-office"].includes(wt));
         if (!match) return false;
       }
-      if (activeDates.size > 0) {
-        const match =
-          (activeDates.has("today") && isToday(j.date_posted)) ||
-          (activeDates.has("week") && isWithinLastWeek(j.date_posted));
-        if (!match) return false;
+      if (activeDates.has("week") && !isWithinLastWeek(j.date_posted)) {
+        return false;
+      }
+      if (loc && !j.location.toLowerCase().includes(loc)) {
+        return false;
       }
       return true;
     });
-  }, [jobs, activeWorkplace, activeDates]);
+  }, [jobs, activeWorkplace, activeDates, locationFilter]);
 
   const { bestMatch, topPaying, newThisWeek } = useMemo(() => {
     const seen = new Set<string>();
@@ -699,7 +746,7 @@ export default function ReviewClient() {
       {savedCount > 0 && (
         <div className="mb-4 flex justify-end">
           <button
-            onClick={() => downloadSavedCsv(jobs, actions)}
+            onClick={() => downloadSavedCsv(jobs, savedIds)}
             className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
           >
             Download Saved ({savedCount})
@@ -729,6 +776,8 @@ export default function ReviewClient() {
           <FilterBar
             activeWorkplace={activeWorkplace}
             activeDates={activeDates}
+            locationFilter={locationFilter}
+            setLocationFilter={setLocationFilter}
             toggle={togglePill}
             clearAll={clearAll}
           />
@@ -756,26 +805,26 @@ export default function ReviewClient() {
             <CardGrid
               title="Best Match"
               jobs={bestMatch}
-              actions={actions}
-              onAction={handleAction}
+              savedIds={savedIds}
+              onToggle={toggleSave}
               showMatchScore
             />
             <CardGrid
               title="Top Paying"
               jobs={topPaying}
-              actions={actions}
-              onAction={handleAction}
+              savedIds={savedIds}
+              onToggle={toggleSave}
             />
             <CardGrid
               title="New This Week"
               jobs={newThisWeek}
-              actions={actions}
-              onAction={handleAction}
+              savedIds={savedIds}
+              onToggle={toggleSave}
             />
             <ListingsTable
               jobs={filtered}
-              actions={actions}
-              onAction={handleAction}
+              savedIds={savedIds}
+              onToggle={toggleSave}
             />
           </>
         )}

@@ -192,6 +192,80 @@ function CollapsedNavList({
   );
 }
 
+function GettingStartedCard() {
+  const [mounted, setMounted] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [hasProfile, setHasProfile] = useState(false);
+  const [hasLastRun, setHasLastRun] = useState(false);
+
+  useEffect(() => {
+    const get = (k: string) => {
+      try {
+        return window.localStorage.getItem(k) ?? "";
+      } catch {
+        return "";
+      }
+    };
+    setHasApiKey(
+      Boolean(
+        get("rolescout_api_key_anthropic") ||
+          get("rolescout_api_key_openai") ||
+          get("rolescout_api_key_gemini")
+      )
+    );
+    setHasProfile(Boolean(get("rolescout_candidate_profile")));
+    setHasLastRun(Boolean(get("rolescout_last_run_summary")));
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="rounded-lg bg-gray-50 p-3" />;
+  }
+
+  const allDone = hasApiKey && hasProfile && hasLastRun;
+
+  if (allDone) {
+    return (
+      <div className="rounded-lg bg-gray-50 p-3">
+        <p className="text-xs font-semibold text-green-700">✓ You&apos;re all set</p>
+        <p className="text-xs text-gray-500">Your job search OS is ready.</p>
+      </div>
+    );
+  }
+
+  const items: { label: string; href: string; done: boolean }[] = [
+    { label: "Add API key", href: "/lab/rolescout/settings", done: hasApiKey },
+    { label: "Build your profile", href: "/lab/rolescout/profile", done: hasProfile },
+    { label: "Run the scraper", href: "/lab/rolescout/scout", done: hasLastRun },
+  ];
+
+  return (
+    <div className="rounded-lg bg-gray-50 p-3">
+      <p className="text-xs font-semibold text-slate-900">Get started</p>
+      {items.map((item) => (
+        <div key={item.href} className="mt-1.5 flex items-center gap-1.5 text-xs">
+          {item.done ? (
+            <>
+              <span aria-hidden="true" className="text-green-600">✓</span>
+              <span className="text-gray-400 line-through">{item.label}</span>
+            </>
+          ) : (
+            <>
+              <span
+                aria-hidden="true"
+                className="inline-block h-3 w-3 rounded-full border border-gray-300"
+              />
+              <Link href={item.href} className="text-blue-600 hover:underline">
+                {item.label}
+              </Link>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ExpandedContent({
   pathname,
   onNavClick,
@@ -229,12 +303,7 @@ function ExpandedContent({
         />
       </nav>
       <div className="p-4">
-        <div className="rounded-lg bg-gray-100 p-4">
-          <p className="text-xs font-semibold text-blue-700">Pro tip</p>
-          <p className="mt-1 text-xs leading-relaxed text-gray-600">
-            Keep your story bank updated to ace behavioral interviews.
-          </p>
-        </div>
+        <GettingStartedCard />
       </div>
     </>
   );

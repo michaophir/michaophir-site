@@ -462,6 +462,21 @@ export default function DashboardClient() {
     ? `Demo data · ${runDateText}`
     : runDateText;
 
+  const runDate = summary?.run_date ? new Date(summary.run_date) : null;
+  const validRunDate = runDate && !isNaN(runDate.getTime()) ? runDate : null;
+  const lastRunDateStr = validRunDate
+    ? validRunDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+  const lastRunTimeStr = validRunDate
+    ? validRunDate.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+
   const sectionLabelClass =
     "text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3";
 
@@ -520,10 +535,10 @@ export default function DashboardClient() {
           icon={<IconCalendar />}
           iconBg="bg-green-100"
           iconColor="text-green-600"
-          value={hasSummary && summary?.run_date ? formatShortDate(summary.run_date) : "—"}
+          value={lastRunDateStr}
           subValue={
             hasSummary
-              ? `${summary?.companies_succeeded ?? 0}/${summary?.companies_total ?? 0} companies`
+              ? `${lastRunTimeStr} · ${summary?.companies_succeeded ?? 0}/${summary?.companies_total ?? 0} companies`
               : undefined
           }
           label="Last Run"
