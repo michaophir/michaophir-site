@@ -17,44 +17,194 @@ const SAMPLE_PROFILE = {
   email: "alex.rivera@email.com",
   phone: "(555) 012-3456",
   location: "San Francisco, CA",
-  title: "Senior Product Manager",
+  title: "Staff Product Manager",
   summary:
-    "Senior Product Manager with 8 years of experience building consumer and B2B SaaS products. Track record of launching 0-to-1 products and scaling them to millions of users. Strong technical background with experience working closely with engineering and data teams.",
+    "Staff Product Manager with 12 years of experience building data-intensive B2B and consumer products at scale. Known for shipping AI-native features before they were mainstream, driving cross-functional alignment across engineering and go-to-market teams, and turning complex technical systems into products operators actually use. Comfortable owning 0-to-1 and scaling existing platforms.",
   skills: [
-    "Product Strategy",
-    "Roadmap Planning",
-    "A/B Testing",
+    "AI Product Strategy",
+    "LLMs",
+    "Agentic Workflows",
+    "Prompt Engineering",
+    "RAG Systems",
+    "Python",
     "SQL",
-    "Data Analysis",
-    "User Research",
-    "Agile",
-    "Figma",
-    "Go-to-Market",
+    "Snowflake",
+    "Kafka",
+    "Data Pipelines",
+    "Event Instrumentation",
+    "Third-Party API Integrations",
+    "Workflow Automation",
+    "Developer-Facing Platforms",
+    "B2B SaaS",
+    "Enterprise Sales Motion",
+    "Product-Led Growth",
+    "Roadmap Planning",
+    "Cross-Functional Alignment",
     "Stakeholder Management",
+    "Vendor Evaluation",
+    "Go-to-Market",
+    "A/B Testing",
+    "Data Enrichment",
+    "Martech",
+    "Customer Data Platforms",
+    "Figma",
+    "Agile",
   ],
   experience: [
     {
-      company: "Acme Corp",
-      title: "Senior Product Manager",
-      start: "2021",
+      company: "Meridian Analytics",
+      title: "Staff Product Manager, AI Platform",
+      start: "2022",
       end: "Present",
       description:
-        "Led a team of 3 PMs building the core analytics platform. Grew DAU 40% through a personalization initiative.",
+        "Built an internal RAG-based search product using LangChain, OpenAI embeddings, and Weaviate that replaced a decade-old keyword search system. Drove 3x improvement in query relevance. Rescued a stalled Kafka-Snowflake event pipeline that replaced a legacy ad reporting system. Reduced vendor spend by $400K annually by consolidating the martech and CDP stack. Founded the Technical PM function from scratch and operated as a peer on the engineering leadership team.",
     },
     {
-      company: "Startup Inc",
-      title: "Product Manager",
-      start: "2018",
-      end: "2021",
+      company: "Streamline",
+      title: "Senior Product Manager, Data Infrastructure",
+      start: "2019",
+      end: "2022",
       description:
-        "Owned the onboarding flow end to end. Reduced time-to-value from 14 days to 3 days.",
+        "Owned the data enrichment platform end to end — third-party API integrations, event schema design, and downstream Snowflake pipelines. Shipped a self-serve data explorer that cut analyst support tickets by 60%. Led the migration of 4 legacy pipelines to a real-time Kafka architecture. Grew the platform from 5 internal teams to 40+ across the org.",
+    },
+    {
+      company: "NovaSaaS",
+      title: "Product Manager, Growth",
+      start: "2016",
+      end: "2019",
+      description:
+        "Owned the onboarding and activation funnel for a B2B SaaS product. Reduced time-to-value from 21 days to 4 days through a series of onboarding experiments. Launched a product-led growth motion that contributed 30% of new ARR within 12 months. Worked closely with sales and CS to build a feedback loop that directly informed the roadmap.",
+    },
+    {
+      company: "FinEdge",
+      title: "Associate Product Manager",
+      start: "2014",
+      end: "2016",
+      description:
+        "Supported roadmap planning for a financial data analytics product. Defined and launched a transparency feature that shifted users from support tickets to self-service data exploration. Coordinated delivery across 5 departments to hit a regulatory deadline.",
     },
   ],
   education: [
-    { institution: "UC Berkeley", degree: "BS Computer Science", year: "2016" },
+    { institution: "UC Berkeley", degree: "BS Computer Science", year: "2014" },
+    {
+      institution: "Stanford Graduate School of Business",
+      degree: "MBA, Technology and Entrepreneurship",
+      year: "2018",
+    },
   ],
-  target_roles: ["Director of Product", "VP of Product", "Head of Product"],
-  target_companies: [],
+  target_roles: [
+    "Staff Product Manager",
+    "Principal Product Manager",
+    "Director of Product",
+    "Head of Product",
+    "Group Product Manager",
+  ],
+  target_companies: [
+    { company_name: "Anthropic", website: "https://anthropic.com", tier: 1 },
+    { company_name: "OpenAI", website: "https://openai.com", tier: 1 },
+    { company_name: "Databricks", website: "https://databricks.com", tier: 1 },
+    { company_name: "Stripe", website: "https://stripe.com", tier: 1 },
+    { company_name: "Ramp", website: "https://ramp.com", tier: 1 },
+    { company_name: "Harvey", website: "https://harvey.ai", tier: 1 },
+    { company_name: "Decagon", website: "https://decagon.ai", tier: 1 },
+    { company_name: "Sierra", website: "https://sierra.ai", tier: 1 },
+    { company_name: "Cursor", website: "https://cursor.com", tier: 1 },
+    { company_name: "Glean", website: "https://glean.com", tier: 1 },
+    { company_name: "Perplexity", website: "https://perplexity.ai", tier: 2 },
+    { company_name: "Plaid", website: "https://plaid.com", tier: 2 },
+    { company_name: "Cohere", website: "https://cohere.com", tier: 2 },
+    { company_name: "Linear", website: "https://linear.app", tier: 2 },
+    { company_name: "Notion", website: "https://notion.so", tier: 2 },
+    { company_name: "Figma", website: "https://figma.com", tier: 2 },
+    { company_name: "Vercel", website: "https://vercel.com", tier: 2 },
+    { company_name: "Mercury", website: "https://mercury.com", tier: 2 },
+    { company_name: "Brex", website: "https://brex.com", tier: 2 },
+    { company_name: "Vanta", website: "https://vanta.com", tier: 2 },
+    { company_name: "ElevenLabs", website: "https://elevenlabs.io", tier: 2 },
+    { company_name: "Scale AI", website: "https://scale.com", tier: 2 },
+    { company_name: "Spotify", website: "https://spotify.com", tier: 2 },
+    { company_name: "Rippling", website: "https://rippling.com", tier: 2 },
+    { company_name: "Deel", website: "https://deel.com", tier: 2 },
+    { company_name: "Intercom", website: "https://intercom.com", tier: 2 },
+    { company_name: "Amplitude", website: "https://amplitude.com", tier: 2 },
+    { company_name: "Mixpanel", website: "https://mixpanel.com", tier: 2 },
+    { company_name: "Retool", website: "https://retool.com", tier: 2 },
+    { company_name: "Airtable", website: "https://airtable.com", tier: 2 },
+    { company_name: "Weights & Biases", website: "https://wandb.ai", tier: 2 },
+    { company_name: "Hugging Face", website: "https://huggingface.co", tier: 2 },
+    { company_name: "Modal", website: "https://modal.com", tier: 2 },
+    { company_name: "Replit", website: "https://replit.com", tier: 2 },
+    { company_name: "Klaviyo", website: "https://klaviyo.com", tier: 3 },
+    { company_name: "Attentive", website: "https://attentive.com", tier: 3 },
+    { company_name: "Justworks", website: "https://justworks.com", tier: 3 },
+    { company_name: "BetterUp", website: "https://betterup.com", tier: 3 },
+    { company_name: "Hinge Health", website: "https://hingehealth.com", tier: 3 },
+    { company_name: "Rokt", website: "https://rokt.com", tier: 3 },
+  ],
+  role_filters: [
+    { field: "title", value: "Chief Product Officer" },
+    { field: "title", value: "CPO" },
+    { field: "title", value: "Vice President of Product" },
+    { field: "title", value: "VP of Product" },
+    { field: "title", value: "Senior Director of Product" },
+    { field: "title", value: "Director of Product Management" },
+    { field: "title", value: "Director of Product" },
+    { field: "title", value: "Head of Product" },
+    { field: "title", value: "Founding Product" },
+    { field: "title", value: "Group Product Manager" },
+    { field: "title", value: "Staff Product Manager" },
+    { field: "title", value: "Principal Product Manager" },
+    { field: "title", value: "Principal Product" },
+    { field: "title", value: "Senior Product Manager" },
+    { field: "title", value: "Product Lead" },
+    { field: "title", value: "Product Manager" },
+    { field: "title", value: "Technical Product Manager" },
+    { field: "seniority", value: "Principal" },
+    { field: "seniority", value: "Director" },
+    { field: "seniority", value: "VP" },
+    { field: "seniority", value: "Head" },
+    { field: "seniority", value: "Staff" },
+    { field: "seniority", value: "Senior" },
+    { field: "seniority", value: "Founding" },
+    { field: "domain", value: "AI" },
+    { field: "domain", value: "machine learning" },
+    { field: "domain", value: "data" },
+    { field: "domain", value: "fintech" },
+    { field: "domain", value: "developer tools" },
+    { field: "domain", value: "analytics" },
+    { field: "domain", value: "infrastructure" },
+    { field: "domain", value: "SaaS" },
+    { field: "domain", value: "media" },
+    { field: "domain", value: "adtech" },
+    { field: "skill", value: "LLM" },
+    { field: "skill", value: "agentic" },
+    { field: "skill", value: "RAG" },
+    { field: "skill", value: "SQL" },
+    { field: "skill", value: "data pipeline" },
+    { field: "skill", value: "API" },
+    { field: "skill", value: "platform" },
+    { field: "skill", value: "B2B" },
+    { field: "skill", value: "enterprise" },
+    { field: "skill", value: "growth" },
+    { field: "skill", value: "roadmapping" },
+    { field: "skill", value: "cross-functional" },
+    { field: "skill", value: "workflow automation" },
+    { field: "skill", value: "generative AI" },
+    { field: "skill", value: "Snowflake" },
+    { field: "skill", value: "Kafka" },
+    { field: "skill", value: "product-led growth" },
+    { field: "skill", value: "0 to 1" },
+    { field: "skill", value: "go-to-market" },
+  ],
+  preferences: {
+    locations: ["San Francisco, CA", "New York, NY", "Remote"],
+    work_arrangement: ["remote", "hybrid"],
+    company_size: ["startup", "mid-size"],
+    company_stage: ["Series B", "Series C", "public"],
+    industries: ["AI", "fintech", "developer tools", "data", "SaaS"],
+    open_to_relocation: false,
+    excluded_companies: [],
+  },
   story_bank: [],
 };
 
@@ -85,6 +235,41 @@ Rules:
 - story_bank: leave as empty array []
 - summary: 2-3 sentence professional summary in first person
 - Return only the JSON object, nothing else`;
+
+const GENERATE_CONFIG_PROMPT = `You are a job search assistant. Given this candidate profile, generate target companies and role filters for a job search.
+
+Return ONLY a valid JSON object with this exact schema — no preamble, no markdown, no explanation:
+
+{
+  "target_companies": [
+    {"company_name": "", "website": "", "tier": 1}
+  ],
+  "role_filters": [
+    {"field": "title", "value": ""},
+    {"field": "seniority", "value": ""},
+    {"field": "domain", "value": ""}
+  ],
+  "preferences": {
+    "locations": [],
+    "work_arrangement": [],
+    "company_size": [],
+    "company_stage": [],
+    "industries": [],
+    "open_to_relocation": false,
+    "excluded_companies": []
+  }
+}
+
+Rules:
+- target_companies: 30-50 companies that match the candidate's background, seniority, and industry. Tier 1 = dream companies, Tier 2 = strong fit, Tier 3 = good backup. Include real company websites. Do NOT include companies they have already worked at.
+- role_filters field types:
+  - title: job titles to match (e.g. 'Senior Product Manager', 'Director of Product', 'Head of Product', 'Staff Product Manager', 'Principal Product Manager', 'VP of Product', 'Group Product Manager') Generate at least 10-15 title variants covering the candidate's seniority level and one level above.
+  - seniority: seniority signals in job titles (e.g. 'Senior', 'Staff', 'Principal', 'Director', 'VP', 'Head', 'Group')
+  - domain: industry and market sector keywords found in job descriptions (e.g. 'fintech', 'AI', 'machine learning', 'media', 'analytics', 'developer tools', 'SaaS', 'adtech'). These should be market/industry terms only — NOT technical skills or tools like LLM, RAG, Python, or Kafka. Those belong in the skills[] array. Generate 8-12 domain keywords matching candidate's industry background.
+- skill rows: do NOT include. Skills come from the candidate's skills[] array and are used directly for scoring.
+- preferences: infer from the candidate's location, career history, and seniority level. work_arrangement options: remote/hybrid/onsite. company_size options: startup/mid-size/enterprise.
+- excluded_companies: always populate with companies the candidate has worked at, based on their experience[]. Never include these in target_companies.
+- Return only the JSON object, nothing else.`;
 
 const TEXTAREA_PLACEHOLDER = `{
   "name": "", "email": "", "phone": "", "location": "", "title": "",
@@ -235,6 +420,10 @@ export default function ProfileClient() {
   const [filename, setFilename] = useState<string>("");
   const [saveMessage, setSaveMessage] = useState<"saved" | "invalid" | null>(null);
 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generateSuccess, setGenerateSuccess] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -335,6 +524,102 @@ export default function ProfileClient() {
     setProfileText("");
     setSaveMessage(null);
   }
+
+  async function generateScoutConfig() {
+    setGenerateError(null);
+    setGenerateSuccess(false);
+
+    const apiKey = getAnthropicKey();
+    if (!apiKey) {
+      setGenerateError("No API key found. Add your Anthropic key in Settings.");
+      return;
+    }
+
+    let profileJson: unknown;
+    try {
+      profileJson = JSON.parse(profileText);
+    } catch {
+      setGenerateError("Save a valid profile first before generating config.");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const model =
+        localStorage.getItem("rolescout_model_anthropic") ??
+        "claude-haiku-4-5-20251001";
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4000,
+          messages: [
+            {
+              role: "user",
+              content: `${GENERATE_CONFIG_PROMPT}\n\nCandidate profile:\n${JSON.stringify(profileJson, null, 2)}`,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let msg = `HTTP ${response.status}`;
+        try {
+          const errJson = JSON.parse(errText);
+          msg = errJson?.error?.message ?? msg;
+        } catch {
+          /* fall through */
+        }
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      const text: string = data?.content?.[0]?.text?.trim() ?? "";
+      if (!text) throw new Error("Empty response from model.");
+      const clean = text
+        .replace(/^```json\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+      const config = JSON.parse(clean);
+
+      const existingProfile = JSON.parse(profileText);
+      const updatedProfile = {
+        ...existingProfile,
+        target_companies: config.target_companies ?? [],
+        role_filters: config.role_filters ?? [],
+        preferences: config.preferences ?? {},
+      };
+
+      const pretty = JSON.stringify(updatedProfile, null, 2);
+      setProfileText(pretty);
+      setCandidateProfile(JSON.stringify(updatedProfile));
+      setGenerateSuccess(true);
+      window.setTimeout(() => setGenerateSuccess(false), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setGenerateError(message);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  const hasValidProfileJson = useMemo(() => {
+    if (!profileText.trim()) return false;
+    try {
+      JSON.parse(profileText);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [profileText]);
 
   const dropZoneClass = useMemo(() => {
     const base =
@@ -505,6 +790,69 @@ export default function ProfileClient() {
           <p className="text-xs text-red-500 mt-2">Invalid JSON — check formatting.</p>
         )}
       </div>
+
+      {hasValidProfileJson && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 mt-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Scout Config</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Generate target companies and role filters from your profile. Results
+                are merged into your profile JSON.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={generateScoutConfig}
+              disabled={isGenerating || profileText.trim() === ""}
+              className={
+                isGenerating || profileText.trim() === ""
+                  ? "rounded-full bg-gray-200 text-gray-400 px-4 py-2 text-sm font-medium cursor-not-allowed shrink-0 ml-4"
+                  : "rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 transition shrink-0 ml-4"
+              }
+            >
+              {isGenerating ? (
+                <span className="flex items-center gap-2">
+                  <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeOpacity="0.25"
+                      strokeWidth="4"
+                    />
+                    <path
+                      d="M12 2a10 10 0 0110 10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  Generating...
+                </span>
+              ) : (
+                "Generate →"
+              )}
+            </button>
+          </div>
+
+          {generateSuccess && (
+            <p className="text-xs text-green-600 mt-3">
+              ✓ Target companies and role filters added to your profile.
+            </p>
+          )}
+          {generateError && (
+            <p className="text-xs text-red-500 mt-3">{generateError}</p>
+          )}
+          {!generateError && !generateSuccess && (
+            <p className="text-xs text-gray-400 mt-3">
+              Generates 30-50 target companies, role title filters, domain and skill
+              keywords, and job search preferences — all inferred from your resume.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
