@@ -129,21 +129,24 @@ function TargetCompaniesSection() {
       if (!cancelled) setRows(next);
     };
 
-    const saved = getTargetCompaniesCsv();
-    if (saved) {
-      apply(saved);
-      return;
-    }
+    (async () => {
+      const saved = await getTargetCompaniesCsv();
+      if (cancelled) return;
+      if (saved) {
+        apply(saved);
+        return;
+      }
 
-    fetch(DEMO_SOURCES.targetCompanies)
-      .then((r) => {
+      try {
+        const r = await fetch(DEMO_SOURCES.targetCompanies);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then(apply)
-      .catch(() => {
+        const text = await r.text();
+        if (cancelled) return;
+        apply(text);
+      } catch {
         // Leave rows empty on failure
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -243,21 +246,24 @@ function RoleFiltersSection() {
       if (!cancelled) setRows(next);
     };
 
-    const saved = getRoleFiltersCsv();
-    if (saved) {
-      apply(saved);
-      return;
-    }
+    (async () => {
+      const saved = await getRoleFiltersCsv();
+      if (cancelled) return;
+      if (saved) {
+        apply(saved);
+        return;
+      }
 
-    fetch(DEMO_SOURCES.roleFilters)
-      .then((r) => {
+      try {
+        const r = await fetch(DEMO_SOURCES.roleFilters);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then(apply)
-      .catch(() => {
+        const text = await r.text();
+        if (cancelled) return;
+        apply(text);
+      } catch {
         // Leave rows empty on failure
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -402,21 +408,24 @@ function LastRunSummarySection() {
       }
     };
 
-    const saved = getLastRunSummary();
-    if (saved) {
-      apply(saved);
-      return;
-    }
+    (async () => {
+      const saved = await getLastRunSummary();
+      if (cancelled) return;
+      if (saved) {
+        apply(saved);
+        return;
+      }
 
-    fetch(DEMO_SOURCES.lastRunSummary)
-      .then((r) => {
+      try {
+        const r = await fetch(DEMO_SOURCES.lastRunSummary);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then(apply)
-      .catch(() => {
+        const text = await r.text();
+        if (cancelled) return;
+        apply(text);
+      } catch {
         // Leave empty on failure
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

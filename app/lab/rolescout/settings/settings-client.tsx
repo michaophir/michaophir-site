@@ -161,14 +161,29 @@ const EMPTY_DATA_RAW: DataRawState = {
   roleFiltersCsv: "",
 };
 
-function readAllDataRaw(): DataRawState {
+async function readAllDataRaw(): Promise<DataRawState> {
+  const [
+    candidateProfile,
+    openRolesCsv,
+    trackingCsv,
+    lastRunSummary,
+    targetCompaniesCsv,
+    roleFiltersCsv,
+  ] = await Promise.all([
+    getCandidateProfile(),
+    getOpenRolesCsv(),
+    getTrackingCsv(),
+    getLastRunSummary(),
+    getTargetCompaniesCsv(),
+    getRoleFiltersCsv(),
+  ]);
   return {
-    candidateProfile: getCandidateProfile(),
-    openRolesCsv: getOpenRolesCsv(),
-    trackingCsv: getTrackingCsv(),
-    lastRunSummary: getLastRunSummary(),
-    targetCompaniesCsv: getTargetCompaniesCsv(),
-    roleFiltersCsv: getRoleFiltersCsv(),
+    candidateProfile,
+    openRolesCsv,
+    trackingCsv,
+    lastRunSummary,
+    targetCompaniesCsv,
+    roleFiltersCsv,
   };
 }
 
@@ -229,17 +244,25 @@ export default function SettingsClient() {
   const [demoStatus, setDemoStatus] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setSavedKeys(readAllKeys());
     setModels(readAllModels());
-    setDataRaw(readAllDataRaw());
+    (async () => {
+      const next = await readAllDataRaw();
+      if (!cancelled) setDataRaw(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function refreshKeys() {
     setSavedKeys(readAllKeys());
   }
 
-  function refreshData() {
-    setDataRaw(readAllDataRaw());
+  async function refreshData() {
+    const next = await readAllDataRaw();
+    setDataRaw(next);
   }
 
   function handleModelChange(provider: ApiProvider, value: string) {
@@ -290,16 +313,18 @@ export default function SettingsClient() {
       JSON.parse(candidate);
       JSON.parse(lastRun);
 
-      setCandidateProfile(candidate);
-      setOpenRolesCsv(openRoles);
-      setTrackingCsv(tracking);
-      setLastRunSummary(lastRun);
-      setTargetCompaniesCsv(companies);
-      setRoleFiltersCsv(filters);
+      await Promise.all([
+        setCandidateProfile(candidate),
+        setOpenRolesCsv(openRoles),
+        setTrackingCsv(tracking),
+        setLastRunSummary(lastRun),
+        setTargetCompaniesCsv(companies),
+        setRoleFiltersCsv(filters),
+      ]);
 
       window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
 
-      refreshData();
+      await refreshData();
       setDemoStatus("Demo data loaded successfully.");
       window.setTimeout(() => setDemoStatus(null), 3000);
     } catch {
@@ -309,8 +334,8 @@ export default function SettingsClient() {
     }
   }
 
-  function handleClearAll() {
-    clearAllRolescout();
+  async function handleClearAll() {
+    await clearAllRolescout();
     setSavedKeys(EMPTY_KEYS);
     setInputs(EMPTY_KEYS);
     setModels(defaultModels());
@@ -485,7 +510,7 @@ export default function SettingsClient() {
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <h3 className="text-lg font-semibold text-slate-900">Data &amp; Storage</h3>
         <p className="text-sm text-gray-500 mt-1 mb-6">
-          All RoleScout data lives in your browser&apos;s localStorage. Clear individual items or wipe everything.
+          All RoleScout data is stored locally in your browser. Clear individual items or wipe everything.
         </p>
 
         <div className="mb-6 pb-6 border-b border-gray-100">
@@ -529,9 +554,9 @@ export default function SettingsClient() {
               validateAsJson: true,
               onText: (text) => setCandidateProfile(text),
             }}
-            onClear={() => {
-              removeCandidateProfile();
-              refreshData();
+            onClear={async () => {
+              await removeCandidateProfile();
+              await refreshData();
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.candidateProfile}
@@ -551,9 +576,9 @@ export default function SettingsClient() {
               validateAsJson: false,
               onText: (text) => setOpenRolesCsv(text),
             }}
-            onClear={() => {
-              removeOpenRolesCsv();
-              refreshData();
+            onClear={async () => {
+              await removeOpenRolesCsv();
+              await refreshData();
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.openRolesCsv}
@@ -571,14 +596,14 @@ export default function SettingsClient() {
               label: "Upload CSV",
               accept: ".csv",
               validateAsJson: false,
-              onText: (text) => {
-                setTrackingCsv(text);
+              onText: async (text) => {
+                await setTrackingCsv(text);
                 window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
               },
             }}
-            onClear={() => {
-              removeTrackingCsv();
-              refreshData();
+            onClear={async () => {
+              await removeTrackingCsv();
+              await refreshData();
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.trackingCsv}
@@ -598,9 +623,9 @@ export default function SettingsClient() {
               validateAsJson: true,
               onText: (text) => setLastRunSummary(text),
             }}
-            onClear={() => {
-              removeLastRunSummary();
-              refreshData();
+            onClear={async () => {
+              await removeLastRunSummary();
+              await refreshData();
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.lastRunSummary}
@@ -620,9 +645,9 @@ export default function SettingsClient() {
               validateAsJson: false,
               onText: (text) => setTargetCompaniesCsv(text),
             }}
-            onClear={() => {
-              removeTargetCompaniesCsv();
-              refreshData();
+            onClear={async () => {
+              await removeTargetCompaniesCsv();
+              await refreshData();
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.targetCompanies}
@@ -642,9 +667,9 @@ export default function SettingsClient() {
               validateAsJson: false,
               onText: (text) => setRoleFiltersCsv(text),
             }}
-            onClear={() => {
-              removeRoleFiltersCsv();
-              refreshData();
+            onClear={async () => {
+              await removeRoleFiltersCsv();
+              await refreshData();
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.roleFilters}
@@ -677,7 +702,7 @@ type UploadConfig = {
   label: string;
   accept: string;
   validateAsJson: boolean;
-  onText: (text: string) => void;
+  onText: (text: string) => void | Promise<void>;
 };
 
 function DataItem({
@@ -695,8 +720,8 @@ function DataItem({
   statusPresent: boolean;
   statusText: string;
   upload?: UploadConfig;
-  onClear?: () => void;
-  onAfterUpload?: () => void;
+  onClear?: () => void | Promise<void>;
+  onAfterUpload?: () => void | Promise<void>;
   sampleHref?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -712,7 +737,7 @@ function DataItem({
     e.target.value = "";
     if (!file || !upload) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = String(ev.target?.result ?? "");
       if (upload.validateAsJson) {
         try {
@@ -722,9 +747,9 @@ function DataItem({
           return;
         }
       }
-      upload.onText(text);
+      await upload.onText(text);
       setError(null);
-      onAfterUpload?.();
+      await onAfterUpload?.();
     };
     reader.onerror = () => setError("Invalid file");
     reader.readAsText(file);

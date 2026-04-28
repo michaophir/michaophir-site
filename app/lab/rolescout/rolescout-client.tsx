@@ -693,9 +693,9 @@ export default function RoleScoutClient() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadFromStorage = () => {
-      const saved = getTrackingCsv();
-      if (!saved) return false;
+    const loadFromStorage = async (): Promise<boolean> => {
+      const saved = await getTrackingCsv();
+      if (cancelled || !saved) return false;
       const result = Papa.parse(saved, { header: true, skipEmptyLines: true });
       const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
       setRows(parsed);
@@ -707,29 +707,29 @@ export default function RoleScoutClient() {
     setLoading(true);
     setError(null);
 
-    if (!loadFromStorage()) {
+    (async () => {
+      const loaded = await loadFromStorage();
+      if (cancelled || loaded) return;
+
       setIsDemo(true);
-      fetch(DEMO_CSV_URL)
-        .then((r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.text();
-        })
-        .then((text) => {
-          if (cancelled) return;
-          const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-          const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
-          setRows(parsed);
-          setLoading(false);
-        })
-        .catch((e) => {
-          if (cancelled) return;
-          setError(String(e));
-          setLoading(false);
-        });
-    }
+      try {
+        const r = await fetch(DEMO_CSV_URL);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const text = await r.text();
+        if (cancelled) return;
+        const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+        const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
+        setRows(parsed);
+        setLoading(false);
+      } catch (e) {
+        if (cancelled) return;
+        setError(String(e));
+        setLoading(false);
+      }
+    })();
 
     const onUpdate = () => {
-      loadFromStorage();
+      void loadFromStorage();
     };
     window.addEventListener(TRACKING_UPDATED_EVENT, onUpdate);
 

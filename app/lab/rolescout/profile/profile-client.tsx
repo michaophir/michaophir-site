@@ -427,18 +427,25 @@ export default function ProfileClient() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const existing = getCandidateProfile();
-    if (existing) {
-      try {
-        const parsed = JSON.parse(existing);
-        setProfileText(JSON.stringify(parsed, null, 2));
-      } catch {
+    let cancelled = false;
+    (async () => {
+      const existing = await getCandidateProfile();
+      if (cancelled) return;
+      if (existing) {
+        try {
+          const parsed = JSON.parse(existing);
+          setProfileText(JSON.stringify(parsed, null, 2));
+        } catch {
+          setProfileText(SAMPLE_PROFILE_JSON);
+        }
+      } else {
         setProfileText(SAMPLE_PROFILE_JSON);
       }
-    } else {
-      setProfileText(SAMPLE_PROFILE_JSON);
-    }
+    })();
     setFilename(getResumeFilename());
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleFile(file: File) {
@@ -459,7 +466,7 @@ export default function ProfileClient() {
       const parsed = await parseResumeWithAnthropic(file, apiKey);
       const pretty = JSON.stringify(parsed, null, 2);
       setProfileText(pretty);
-      setCandidateProfile(JSON.stringify(parsed));
+      await setCandidateProfile(JSON.stringify(parsed));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setUploadError(message);
@@ -501,12 +508,12 @@ export default function ProfileClient() {
     setMissingKey(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
     try {
       const parsed = JSON.parse(profileText);
       const pretty = JSON.stringify(parsed, null, 2);
       setProfileText(pretty);
-      setCandidateProfile(JSON.stringify(parsed));
+      await setCandidateProfile(JSON.stringify(parsed));
       setSaveMessage("saved");
       window.setTimeout(() => setSaveMessage(null), 2500);
     } catch {
@@ -600,7 +607,7 @@ export default function ProfileClient() {
 
       const pretty = JSON.stringify(updatedProfile, null, 2);
       setProfileText(pretty);
-      setCandidateProfile(JSON.stringify(updatedProfile));
+      await setCandidateProfile(JSON.stringify(updatedProfile));
       setGenerateSuccess(true);
       window.setTimeout(() => setGenerateSuccess(false), 3000);
     } catch (err) {

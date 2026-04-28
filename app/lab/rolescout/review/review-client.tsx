@@ -622,32 +622,31 @@ export default function ReviewClient() {
       setJobs(parsed.filter((j) => j.job_id));
     };
 
-    const saved = getOpenRolesCsv();
-    if (saved) {
-      applyCsv(saved);
-      setIsDemo(false);
-      setLoading(false);
-      return;
-    }
+    (async () => {
+      const saved = await getOpenRolesCsv();
+      if (cancelled) return;
+      if (saved) {
+        applyCsv(saved);
+        setIsDemo(false);
+        setLoading(false);
+        return;
+      }
 
-    setIsDemo(true);
-    fetch(DEMO_CSV_URL)
-      .then((res) => {
+      setIsDemo(true);
+      try {
+        const res = await fetch(DEMO_CSV_URL);
         if (!res.ok) throw new Error("Failed to fetch data");
-        return res.text();
-      })
-      .then((text) => {
+        const text = await res.text();
         if (cancelled) return;
         applyCsv(text);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (cancelled) return;
-        setError(e.message);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
+        const message = e instanceof Error ? e.message : String(e);
+        setError(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
     return () => {
       cancelled = true;

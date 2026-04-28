@@ -341,14 +341,6 @@ export default function DashboardClient() {
   useEffect(() => {
     let cancelled = false;
 
-    const savedSummary = getLastRunSummary();
-    const savedTracking = getTrackingCsv();
-    const savedOpenRoles = getOpenRolesCsv();
-
-    if (savedSummary) setSummaryRaw(savedSummary);
-    if (savedTracking) setTrackingRaw(savedTracking);
-    if (savedOpenRoles) setOpenRolesRaw(savedOpenRoles);
-
     const fetchDemo = (
       url: string,
       setRaw: (text: string) => void,
@@ -369,19 +361,32 @@ export default function DashboardClient() {
         });
     };
 
-    if (!savedSummary) {
-      fetchDemo(DEMO_SOURCES.lastRunSummary, setSummaryRaw, setSummaryIsDemo);
-    }
-    if (!savedTracking) {
-      fetchDemo(DEMO_SOURCES.trackingCsv, setTrackingRaw, setTrackingIsDemo);
-    }
-    if (!savedOpenRoles) {
-      fetchDemo(DEMO_SOURCES.openRolesCsv, setOpenRolesRaw, setOpenRolesIsDemo);
-    }
+    (async () => {
+      const [savedSummary, savedTracking, savedOpenRoles] = await Promise.all([
+        getLastRunSummary(),
+        getTrackingCsv(),
+        getOpenRolesCsv(),
+      ]);
+      if (cancelled) return;
 
-    const onTrackingUpdated = () => {
-      const latest = getTrackingCsv();
-      if (!latest) return;
+      if (savedSummary) setSummaryRaw(savedSummary);
+      if (savedTracking) setTrackingRaw(savedTracking);
+      if (savedOpenRoles) setOpenRolesRaw(savedOpenRoles);
+
+      if (!savedSummary) {
+        fetchDemo(DEMO_SOURCES.lastRunSummary, setSummaryRaw, setSummaryIsDemo);
+      }
+      if (!savedTracking) {
+        fetchDemo(DEMO_SOURCES.trackingCsv, setTrackingRaw, setTrackingIsDemo);
+      }
+      if (!savedOpenRoles) {
+        fetchDemo(DEMO_SOURCES.openRolesCsv, setOpenRolesRaw, setOpenRolesIsDemo);
+      }
+    })();
+
+    const onTrackingUpdated = async () => {
+      const latest = await getTrackingCsv();
+      if (cancelled || !latest) return;
       setTrackingRaw(latest);
       setTrackingIsDemo(false);
     };
