@@ -96,22 +96,24 @@ const DATE_PILLS: { value: DatePill; label: string }[] = [
 function FilterBar({
   activeWorkplace,
   activeDates,
-  locationFilter,
-  setLocationFilter,
+  searchFilter,
+  setSearchFilter,
   toggle,
   clearAll,
 }: {
   activeWorkplace: Set<WorkplacePill>;
   activeDates: Set<DatePill>;
-  locationFilter: string;
-  setLocationFilter: (v: string) => void;
+  searchFilter: string;
+  setSearchFilter: (v: string) => void;
   toggle: (pill: WorkplacePill | DatePill) => void;
   clearAll: () => void;
 }) {
+  const [searchFocused, setSearchFocused] = useState(false);
+
   const noneActive =
     activeWorkplace.size === 0 &&
     activeDates.size === 0 &&
-    locationFilter.trim() === "";
+    searchFilter.trim() === "";
 
   const pill = (
     label: string,
@@ -140,13 +142,22 @@ function FilterBar({
       {WORKPLACE_PILLS.map((p) =>
         pill(p.label, activeWorkplace.has(p.value), () => toggle(p.value))
       )}
-      <input
-        type="text"
-        value={locationFilter}
-        onChange={(e) => setLocationFilter(e.target.value)}
-        placeholder="Filter by location..."
-        className="ml-3 w-48 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm text-slate-700 placeholder-gray-400 focus:border-slate-400 focus:outline-none"
-      />
+      <div className="relative ml-3">
+        <input
+          type="text"
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+          placeholder="Filter roles..."
+          className="w-48 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm text-slate-700 placeholder-gray-400 focus:border-slate-400 focus:outline-none"
+        />
+        {searchFocused && (
+          <p className="absolute mt-1 text-xs text-gray-400 bg-white rounded-lg px-3 py-1.5 shadow-sm border border-gray-100 z-10 max-w-xs">
+            Tip: prefix with minus to exclude · separate terms with commas
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -607,7 +618,7 @@ export default function ReviewClient() {
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
-  const [locationFilter, setLocationFilter] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const savedCount = savedIds.size;
@@ -674,7 +685,7 @@ export default function ReviewClient() {
   const clearAll = () => {
     setActiveWorkplace(new Set());
     setActiveDates(new Set());
-    setLocationFilter("");
+    setSearchFilter("");
   };
 
   const toggleSave = (id: string) => {
@@ -687,8 +698,7 @@ export default function ReviewClient() {
   };
 
   const filtered = useMemo(() => {
-    const loc = locationFilter.trim().toLowerCase();
-    return jobs.filter((j) => {
+    let result = jobs.filter((j) => {
       if (activeWorkplace.size > 0) {
         const wt = j.workplace_type.toLowerCase();
         const match =
@@ -700,12 +710,38 @@ export default function ReviewClient() {
       if (activeDates.has("week") && !isWithinLastWeek(j.date_posted)) {
         return false;
       }
-      if (loc && !j.location.toLowerCase().includes(loc)) {
-        return false;
-      }
       return true;
     });
-  }, [jobs, activeWorkplace, activeDates, locationFilter]);
+
+    if (searchFilter.trim()) {
+      const terms = searchFilter
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      for (const term of terms) {
+        if (term.startsWith("-")) {
+          const keyword = term.slice(1).toLowerCase();
+          if (!keyword) continue;
+          result = result.filter(
+            (role) =>
+              !role.job_title.toLowerCase().includes(keyword) &&
+              !role.location.toLowerCase().includes(keyword)
+          );
+        } else {
+          const keyword = term.toLowerCase();
+          result = result.filter(
+            (role) =>
+              role.job_title.toLowerCase().includes(keyword) ||
+              role.location.toLowerCase().includes(keyword) ||
+              role.company.toLowerCase().includes(keyword)
+          );
+        }
+      }
+    }
+
+    return result;
+  }, [jobs, activeWorkplace, activeDates, searchFilter]);
 
   const { bestMatch, topPaying, newThisWeek } = useMemo(() => {
     const seen = new Set<string>();
@@ -775,8 +811,8 @@ export default function ReviewClient() {
           <FilterBar
             activeWorkplace={activeWorkplace}
             activeDates={activeDates}
-            locationFilter={locationFilter}
-            setLocationFilter={setLocationFilter}
+            searchFilter={searchFilter}
+            setSearchFilter={setSearchFilter}
             toggle={togglePill}
             clearAll={clearAll}
           />
@@ -820,11 +856,16 @@ export default function ReviewClient() {
               savedIds={savedIds}
               onToggle={toggleSave}
             />
-            <ListingsTable
-              jobs={filtered}
-              savedIds={savedIds}
-              onToggle={toggleSave}
-            />
+            <div className="hidden md:block mt-8">
+              <ListingsTable
+                jobs={filtered}
+                savedIds={savedIds}
+                onToggle={toggleSave}
+              />
+            </div>
+            <div className="block md:hidden mt-6 text-center text-xs text-gray-400">
+              Full listings table available on desktop.
+            </div>
           </>
         )}
       </div>
