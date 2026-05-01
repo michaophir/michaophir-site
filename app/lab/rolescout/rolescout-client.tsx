@@ -5,7 +5,7 @@ import Papa from "papaparse";
 import { getTrackingCsv, TRACKING_UPDATED_EVENT } from "./lib/storage";
 
 const DEMO_CSV_URL =
-  "https://raw.githubusercontent.com/michaophir/sandbox/main/tracking_sheet.csv";
+  "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/tracking_sheet.csv";
 
 const STAGES = [
   "Saved",

@@ -35,11 +35,11 @@ type LastRunSummary = {
 
 const DEMO_SOURCES = {
   lastRunSummary:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/last_run_summary.json",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/last_run_summary.json",
   targetCompanies:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/target_company_list.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/target_company_list.csv",
   roleFilters:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/role_filters.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/role_filters.csv",
 };
 
 // ---------- Helpers ----------
@@ -414,13 +414,13 @@ function RunScraperSection() {
         against your target companies and role filters.
       </p>
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 font-mono text-xs text-slate-700 mb-4">
-        git clone https://github.com/michaophir/sandbox<br />
+        git clone https://github.com/michaophir/rolescout-scraper<br />
         cd sandbox<br />
         pip install -r requirements.txt<br />
         python scraper.py
       </div>
       <a
-        href="https://github.com/michaophir/sandbox"
+        href="https://github.com/michaophir/rolescout-scraper"
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-gray-50 transition"

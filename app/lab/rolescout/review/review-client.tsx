@@ -5,7 +5,7 @@ import Papa from "papaparse";
 import { getOpenRolesCsv } from "../lib/storage";
 
 const DEMO_CSV_URL =
-  "https://raw.githubusercontent.com/michaophir/sandbox/main/open_roles.csv";
+  "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/open_roles.csv";
 
 type Job = {
   job_id: string;

@@ -42,17 +42,17 @@ import {
 
 const DEMO_SOURCES = {
   candidateProfile:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/candidate_profile.json",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/candidate_profile.json",
   openRolesCsv:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/open_roles.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/open_roles.csv",
   trackingCsv:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/tracking_sheet.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/tracking_sheet.csv",
   lastRunSummary:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/last_run_summary.json",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/last_run_summary.json",
   targetCompanies:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/target_company_list.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/target_company_list.csv",
   roleFilters:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/role_filters.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/role_filters.csv",
 };
 
 type ModelOption = {

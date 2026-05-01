@@ -61,11 +61,11 @@ type DisplayAction = {
 
 const DEMO_SOURCES = {
   openRolesCsv:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/open_roles.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/open_roles.csv",
   trackingCsv:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/tracking_sheet.csv",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/tracking_sheet.csv",
   lastRunSummary:
-    "https://raw.githubusercontent.com/michaophir/sandbox/main/last_run_summary.json",
+    "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/last_run_summary.json",
 };
 
 const STAGES = [
