@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Papa from "papaparse";
 import {
+  getCandidateProfile,
   getLastRunSummary,
   getRoleFiltersCsv,
   getTargetCompaniesCsv,
@@ -14,7 +15,6 @@ type TargetCompany = {
   name: string;
   website: string;
   tier: string;
-  excluded: boolean;
 };
 
 type RoleFilter = {
@@ -58,6 +58,16 @@ function downloadCsv(filename: string, headers: string[], rows: string[][]) {
 function parseCsv<T>(text: string, mapper: (row: Record<string, string>) => T): T[] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true });
   return (result.data as Record<string, string>[]).map(mapper);
+}
+
+async function readProfile(): Promise<Record<string, unknown> | null> {
+  const profileJson = await getCandidateProfile();
+  if (!profileJson) return null;
+  try {
+    return JSON.parse(profileJson) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 // ---------- Shared UI ----------
@@ -111,10 +121,22 @@ function SettingsNote() {
   );
 }
 
+function ProfileSourceNote() {
+  return (
+    <p className="text-xs text-gray-400 mt-1">
+      From your candidate profile ·{" "}
+      <a href="/lab/rolescout/profile" className="underline hover:text-slate-600">
+        Edit in Profile
+      </a>
+    </p>
+  );
+}
+
 // ---------- Target Companies ----------
 
 function TargetCompaniesSection() {
   const [rows, setRows] = useState<TargetCompany[]>([]);
+  const [fromProfile, setFromProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,12 +146,35 @@ function TargetCompaniesSection() {
         name: (r["company_name"] ?? r["Company Name"] ?? r["name"] ?? "").trim(),
         website: (r["website"] ?? r["Website"] ?? "").trim(),
         tier: (r["tier"] ?? r["Tier"] ?? "").trim(),
-        excluded: false,
       })).filter((c) => c.name);
       if (!cancelled) setRows(next);
     };
 
     (async () => {
+      const profile = await readProfile();
+      if (cancelled) return;
+      const profileCompanies = Array.isArray(profile?.target_companies)
+        ? (profile?.target_companies as Array<{
+            company_name?: string;
+            website?: string;
+            tier?: string | number;
+          }>)
+        : [];
+      if (profileCompanies.length > 0) {
+        const mapped: TargetCompany[] = profileCompanies
+          .map((c) => ({
+            name: (c.company_name ?? "").trim(),
+            website: (c.website ?? "").trim(),
+            tier: c.tier !== undefined ? String(c.tier) : "",
+          }))
+          .filter((c) => c.name);
+        if (!cancelled) {
+          setRows(mapped);
+          setFromProfile(true);
+        }
+        return;
+      }
+
       const saved = await getTargetCompaniesCsv();
       if (cancelled) return;
       if (saved) {
@@ -153,16 +198,11 @@ function TargetCompaniesSection() {
     };
   }, []);
 
-  const toggleExcluded = (idx: number) =>
-    setRows((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, excluded: !r.excluded } : r))
-    );
-
   const handleDownload = () => {
     downloadCsv(
       "target_company_list.csv",
-      ["company_name", "website", "tier", "excluded"],
-      rows.map((r) => [r.name, r.website, r.tier, r.excluded ? "true" : "false"])
+      ["company_name", "website", "tier"],
+      rows.map((r) => [r.name, r.website, r.tier])
     );
   };
 
@@ -174,7 +214,7 @@ function TargetCompaniesSection() {
       subtitle="Companies the scraper will poll for open roles."
       actions={<DownloadButton onClick={handleDownload} />}
     >
-      <SettingsNote />
+      {fromProfile ? <ProfileSourceNote /> : <SettingsNote />}
       <div
         className={`mt-4 rounded-lg border border-gray-100 ${
           needsScroll ? "max-h-[400px] overflow-y-auto" : "overflow-hidden"
@@ -186,13 +226,12 @@ function TargetCompaniesSection() {
               <th className="px-4 py-2.5">Company Name</th>
               <th className="px-4 py-2.5">Website</th>
               <th className="px-4 py-2.5">Tier</th>
-              <th className="w-[80px] px-4 py-2.5 text-right">Include</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
                   No companies yet.
                 </td>
               </tr>
@@ -200,27 +239,11 @@ function TargetCompaniesSection() {
             {rows.map((r, i) => (
               <tr
                 key={`${r.name}-${i}`}
-                className={`border-b border-gray-50 ${
-                  r.excluded ? "text-gray-400 line-through" : "text-slate-900"
-                }`}
+                className="border-b border-gray-50 text-slate-900"
               >
                 <td className="px-4 py-2.5 font-medium">{r.name}</td>
                 <td className="px-4 py-2.5 text-gray-500">{r.website}</td>
                 <td className="px-4 py-2.5 text-gray-500">{r.tier}</td>
-                <td className="px-4 py-2.5 text-right">
-                  <button
-                    type="button"
-                    onClick={() => toggleExcluded(i)}
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold transition ${
-                      r.excluded
-                        ? "bg-gray-100 text-gray-400 hover:bg-gray-200"
-                        : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                    }`}
-                    title={r.excluded ? "Click to include" : "Click to exclude"}
-                  >
-                    #
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -234,6 +257,7 @@ function TargetCompaniesSection() {
 
 function RoleFiltersSection() {
   const [rows, setRows] = useState<RoleFilter[]>([]);
+  const [fromProfile, setFromProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -247,6 +271,25 @@ function RoleFiltersSection() {
     };
 
     (async () => {
+      const profile = await readProfile();
+      if (cancelled) return;
+      const profileFilters = Array.isArray(profile?.role_filters)
+        ? (profile?.role_filters as Array<{ field?: string; value?: string }>)
+        : [];
+      if (profileFilters.length > 0) {
+        const mapped: RoleFilter[] = profileFilters
+          .map((f) => ({
+            field: (f.field ?? "").trim(),
+            value: (f.value ?? "").trim(),
+          }))
+          .filter((f) => f.field && f.value);
+        if (!cancelled) {
+          setRows(mapped);
+          setFromProfile(true);
+        }
+        return;
+      }
+
       const saved = await getRoleFiltersCsv();
       if (cancelled) return;
       if (saved) {
@@ -284,7 +327,7 @@ function RoleFiltersSection() {
       subtitle="Keywords and constraints applied after scraping to narrow the role list."
       actions={<DownloadButton onClick={handleDownload} />}
     >
-      <SettingsNote />
+      {fromProfile ? <ProfileSourceNote /> : <SettingsNote />}
       <div className="mt-4 overflow-hidden rounded-lg border border-gray-100">
         <table className="w-full text-left text-sm">
           <thead>
@@ -311,6 +354,52 @@ function RoleFiltersSection() {
         </table>
       </div>
     </SectionCard>
+  );
+}
+
+// ---------- Skills ----------
+
+function SkillsSection() {
+  const [skills, setSkills] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const profile = await readProfile();
+      if (cancelled || !profile) return;
+      const raw = Array.isArray(profile.skills) ? profile.skills : [];
+      const cleaned = raw
+        .map((s) => (typeof s === "string" ? s.trim() : ""))
+        .filter((s) => s.length > 0);
+      if (!cancelled) setSkills(cleaned);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (skills.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 mt-6">
+      <h3 className="text-base font-semibold text-slate-900 mb-1">Skills</h3>
+      <p className="text-xs text-gray-400 mb-4">
+        Used for match scoring against job descriptions ·{" "}
+        <a href="/lab/rolescout/profile" className="underline hover:text-slate-600">
+          Edit in Profile
+        </a>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {skills.map((skill) => (
+          <span
+            key={skill}
+            className="rounded-full bg-gray-100 px-3 py-1 text-xs text-slate-700"
+          >
+            {skill}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -610,6 +699,7 @@ export default function ScoutClient() {
       <RunScraperSection />
       <TargetCompaniesSection />
       <RoleFiltersSection />
+      <SkillsSection />
     </div>
   );
 }

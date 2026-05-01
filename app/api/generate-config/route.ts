@@ -29,8 +29,8 @@ Return ONLY a valid JSON object with this exact schema — no preamble, no markd
 Rules:
 - target_companies: 30-50 companies matching candidate background and seniority. Tier 1 = dream, Tier 2 = strong fit, Tier 3 = backup. Include real websites. Never include companies from experience[].
 - role_filters title: generate 10-15 title variants at candidate level and one level above.
-- role_filters seniority: seniority signals in job titles.
-- role_filters domain: 8-12 industry/market keywords only. NOT technical skills or tools.
+- role_filters seniority: one row per seniority signal. Each value must be a single word that appears standalone in job titles. Example: Principal, Senior, Staff, Director, VP, Head, Chief, Lead. Never combine multiple values in one row.
+- role_filters domain: short single or two-word keywords that appear verbatim in job descriptions (e.g. 'fintech', 'AI', 'machine learning', 'privacy', 'compliance', 'analytics', 'SaaS'). Max 3 words per value. Never use phrases like 'AI and Machine Learning' — split into separate rows: 'AI' and 'machine learning'.
 - excluded_companies: always populate from experience[]. Never repeat in target_companies.
 - Return only the JSON object, nothing else.`;
 

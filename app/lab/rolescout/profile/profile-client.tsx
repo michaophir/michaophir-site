@@ -264,8 +264,8 @@ Rules:
 - target_companies: 30-50 companies that match the candidate's background, seniority, and industry. Tier 1 = dream companies, Tier 2 = strong fit, Tier 3 = good backup. Include real company websites. Do NOT include companies they have already worked at.
 - role_filters field types:
   - title: job titles to match (e.g. 'Senior Product Manager', 'Director of Product', 'Head of Product', 'Staff Product Manager', 'Principal Product Manager', 'VP of Product', 'Group Product Manager') Generate at least 10-15 title variants covering the candidate's seniority level and one level above.
-  - seniority: seniority signals in job titles (e.g. 'Senior', 'Staff', 'Principal', 'Director', 'VP', 'Head', 'Group')
-  - domain: industry and market sector keywords found in job descriptions (e.g. 'fintech', 'AI', 'machine learning', 'media', 'analytics', 'developer tools', 'SaaS', 'adtech'). These should be market/industry terms only — NOT technical skills or tools like LLM, RAG, Python, or Kafka. Those belong in the skills[] array. Generate 8-12 domain keywords matching candidate's industry background.
+  - seniority: one row per seniority signal. Each value must be a single word that appears standalone in job titles. Example: Principal, Senior, Staff, Director, VP, Head, Chief, Lead. Never combine multiple values in one row.
+  - domain: short single or two-word keywords that appear verbatim in job descriptions (e.g. 'fintech', 'AI', 'machine learning', 'privacy', 'compliance', 'analytics', 'SaaS'). Max 3 words per value. Never use phrases like 'AI and Machine Learning' — split into separate rows: 'AI' and 'machine learning'.
 - skill rows: do NOT include. Skills come from the candidate's skills[] array and are used directly for scoring.
 - preferences: infer from the candidate's location, career history, and seniority level. work_arrangement options: remote/hybrid/onsite. company_size options: startup/mid-size/enterprise.
 - excluded_companies: always populate with companies the candidate has worked at, based on their experience[]. Never include these in target_companies.
@@ -354,14 +354,17 @@ async function parseResumeWithAnthropic(file: File, apiKey: string): Promise<unk
 
 async function parseResume(
   file: File,
-  apiKey: string | null
+  apiKey: string | null,
+  setParseRemaining: (n: number | null) => void
 ): Promise<unknown> {
   if (!file.name.toLowerCase().endsWith(".pdf")) {
     throw new Error("Unsupported file type. Upload a PDF.");
   }
 
   if (apiKey) {
-    return parseResumeWithAnthropic(file, apiKey);
+    const profile = await parseResumeWithAnthropic(file, apiKey);
+    setParseRemaining(null);
+    return profile;
   }
 
   const formData = new FormData();
@@ -382,6 +385,7 @@ async function parseResume(
   }
 
   const data = await response.json();
+  setParseRemaining(data.remaining ?? null);
   return data.profile;
 }
 
@@ -455,6 +459,8 @@ export default function ProfileClient() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [generateSuccess, setGenerateSuccess] = useState(false);
+  const [parseRemaining, setParseRemaining] = useState<number | null>(null);
+  const [configRemaining, setConfigRemaining] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -490,7 +496,7 @@ export default function ProfileClient() {
 
     setIsParsing(true);
     try {
-      const parsed = await parseResume(file, apiKey);
+      const parsed = await parseResume(file, apiKey, setParseRemaining);
       const pretty = JSON.stringify(parsed, null, 2);
       setProfileText(pretty);
       await setCandidateProfile(JSON.stringify(parsed));
@@ -625,6 +631,7 @@ export default function ProfileClient() {
           .replace(/```\s*$/i, "")
           .trim();
         config = JSON.parse(clean);
+        setConfigRemaining(null);
       } else {
         const response = await fetch("/api/generate-config", {
           method: "POST",
@@ -642,6 +649,7 @@ export default function ProfileClient() {
         }
 
         const data = await response.json();
+        setConfigRemaining(data.remaining ?? null);
         config = data.config;
       }
 
@@ -779,6 +787,20 @@ export default function ProfileClient() {
           className="hidden"
         />
 
+        {parseRemaining !== null && (
+          <p
+            className={`text-xs mt-2 ${
+              parseRemaining === 0 ? "text-amber-600" : "text-gray-400"
+            }`}
+          >
+            {parseRemaining === 0
+              ? "Free parse limit reached — add your Anthropic key in Settings for unlimited runs."
+              : `${parseRemaining} free resume parse${
+                  parseRemaining === 1 ? "" : "s"
+                } remaining today.`}
+          </p>
+        )}
+
         {uploadError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 mt-4">
             {uploadError.includes("limit reached")
@@ -884,6 +906,20 @@ export default function ProfileClient() {
               )}
             </button>
           </div>
+
+          {configRemaining !== null && (
+            <p
+              className={`text-xs mt-2 ${
+                configRemaining === 0 ? "text-amber-600" : "text-gray-400"
+              }`}
+            >
+              {configRemaining === 0
+                ? "Free generation limit reached — add your Anthropic key in Settings for unlimited runs."
+                : `${configRemaining} free config generation${
+                    configRemaining === 1 ? "" : "s"
+                  } remaining today.`}
+            </p>
+          )}
 
           {generateSuccess && (
             <p className="text-xs text-green-600 mt-3">
