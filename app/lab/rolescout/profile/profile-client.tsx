@@ -352,6 +352,39 @@ async function parseResumeWithAnthropic(file: File, apiKey: string): Promise<unk
   return parsed;
 }
 
+async function parseResume(
+  file: File,
+  apiKey: string | null
+): Promise<unknown> {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    throw new Error("Unsupported file type. Upload a PDF.");
+  }
+
+  if (apiKey) {
+    return parseResumeWithAnthropic(file, apiKey);
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch("/api/parse-resume", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (response.status === 429) {
+    const data = await response.json();
+    throw new Error(data.error);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Server error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.profile;
+}
+
 function downloadJson(content: string) {
   const blob = new Blob([content], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -412,7 +445,6 @@ function SpinnerSm() {
 export default function ProfileClient() {
   const [isParsing, setIsParsing] = useState(false);
   const [tab, setTab] = useState<UploadTab>("upload");
-  const [missingKey, setMissingKey] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -450,20 +482,15 @@ export default function ProfileClient() {
 
   async function handleFile(file: File) {
     setUploadError(null);
-    setMissingKey(false);
 
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      setMissingKey(true);
-      return;
-    }
+    const apiKey = getAnthropicKey() || null;
 
     setResumeFilename(file.name);
     setFilename(file.name);
 
     setIsParsing(true);
     try {
-      const parsed = await parseResumeWithAnthropic(file, apiKey);
+      const parsed = await parseResume(file, apiKey);
       const pretty = JSON.stringify(parsed, null, 2);
       setProfileText(pretty);
       await setCandidateProfile(JSON.stringify(parsed));
@@ -505,7 +532,6 @@ export default function ProfileClient() {
     removeResumeFilename();
     setFilename("");
     setUploadError(null);
-    setMissingKey(false);
   }
 
   async function handleSave() {
@@ -536,11 +562,7 @@ export default function ProfileClient() {
     setGenerateError(null);
     setGenerateSuccess(false);
 
-    const apiKey = getAnthropicKey();
-    if (!apiKey) {
-      setGenerateError("No API key found. Add your Anthropic key in Settings.");
-      return;
-    }
+    const apiKey = getAnthropicKey() || null;
 
     let profileJson: unknown;
     try {
@@ -552,50 +574,76 @@ export default function ProfileClient() {
 
     setIsGenerating(true);
     try {
-      const model =
-        localStorage.getItem("rolescout_model_anthropic") ??
-        "claude-haiku-4-5-20251001";
+      let config: {
+        target_companies?: unknown;
+        role_filters?: unknown;
+        preferences?: unknown;
+      };
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 4000,
-          messages: [
-            {
-              role: "user",
-              content: `${GENERATE_CONFIG_PROMPT}\n\nCandidate profile:\n${JSON.stringify(profileJson, null, 2)}`,
-            },
-          ],
-        }),
-      });
+      if (apiKey) {
+        const model =
+          localStorage.getItem("rolescout_model_anthropic") ??
+          "claude-haiku-4-5-20251001";
 
-      if (!response.ok) {
-        const errText = await response.text();
-        let msg = `HTTP ${response.status}`;
-        try {
-          const errJson = JSON.parse(errText);
-          msg = errJson?.error?.message ?? msg;
-        } catch {
-          /* fall through */
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 4000,
+            messages: [
+              {
+                role: "user",
+                content: `${GENERATE_CONFIG_PROMPT}\n\nCandidate profile:\n${JSON.stringify(profileJson, null, 2)}`,
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          let msg = `HTTP ${response.status}`;
+          try {
+            const errJson = JSON.parse(errText);
+            msg = errJson?.error?.message ?? msg;
+          } catch {
+            /* fall through */
+          }
+          throw new Error(msg);
         }
-        throw new Error(msg);
-      }
 
-      const data = await response.json();
-      const text: string = data?.content?.[0]?.text?.trim() ?? "";
-      if (!text) throw new Error("Empty response from model.");
-      const clean = text
-        .replace(/^```json\s*/i, "")
-        .replace(/```\s*$/i, "")
-        .trim();
-      const config = JSON.parse(clean);
+        const data = await response.json();
+        const text: string = data?.content?.[0]?.text?.trim() ?? "";
+        if (!text) throw new Error("Empty response from model.");
+        const clean = text
+          .replace(/^```json\s*/i, "")
+          .replace(/```\s*$/i, "")
+          .trim();
+        config = JSON.parse(clean);
+      } else {
+        const response = await fetch("/api/generate-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: profileJson }),
+        });
+
+        if (response.status === 429) {
+          const data = await response.json();
+          throw new Error(data.error);
+        }
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        config = data.config;
+      }
 
       const existingProfile = JSON.parse(profileText);
       const updatedProfile = {
@@ -731,18 +779,11 @@ export default function ProfileClient() {
           className="hidden"
         />
 
-        {missingKey && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 mt-4">
-            No API key found. Add your Anthropic key in Settings to enable AI parsing.{" "}
-            <a href="/lab/rolescout/settings" className="font-medium underline">
-              Go to Settings →
-            </a>
-          </div>
-        )}
-
         {uploadError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 mt-4">
-            Parsing failed: {uploadError}. Check your API key in Settings and try again.
+            {uploadError.includes("limit reached")
+              ? uploadError
+              : `Parsing failed: ${uploadError}. Check your API key in Settings and try again.`}
           </div>
         )}
       </div>
@@ -804,8 +845,8 @@ export default function ProfileClient() {
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Scout Config</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Generate target companies and role filters from your profile. Results
-                are merged into your profile JSON.
+                Generate target companies and role filters from your profile.
+                Free to use · 3 runs per day · Results merged into your profile.
               </p>
             </div>
             <button
