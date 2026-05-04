@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
-import { getOpenRolesCsv } from "../lib/storage";
+import { getLastRunSummary, getOpenRolesCsv } from "../lib/storage";
 
 const DEMO_CSV_URL =
   "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/open_roles.csv";
@@ -619,9 +619,49 @@ export default function ReviewClient() {
   const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
   const [searchFilter, setSearchFilter] = useState("");
+  const [lastScrapedDate, setLastScrapedDate] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const savedCount = savedIds.size;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLastScrapedDate = async () => {
+      const json = await getLastRunSummary();
+      if (cancelled || !json) return;
+      try {
+        const parsed = JSON.parse(json) as { run_date?: string };
+        if (!parsed.run_date) return;
+        const d = new Date(parsed.run_date);
+        if (isNaN(d.getTime())) return;
+        const dateStr = d.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeStr = d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        if (!cancelled) setLastScrapedDate(`${dateStr} at ${timeStr}`);
+      } catch {
+        // ignore
+      }
+    };
+
+    void loadLastScrapedDate();
+
+    const onDataUpdated = () => {
+      void loadLastScrapedDate();
+    };
+    window.addEventListener("rolescout-data-updated", onDataUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("rolescout-data-updated", onDataUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -633,12 +673,18 @@ export default function ReviewClient() {
       setJobs(parsed.filter((j) => j.job_id));
     };
 
-    (async () => {
+    const loadOpenRoles = async (): Promise<boolean> => {
       const saved = await getOpenRolesCsv();
+      if (cancelled || !saved) return false;
+      applyCsv(saved);
+      setIsDemo(false);
+      return true;
+    };
+
+    (async () => {
+      const loaded = await loadOpenRoles();
       if (cancelled) return;
-      if (saved) {
-        applyCsv(saved);
-        setIsDemo(false);
+      if (loaded) {
         setLoading(false);
         return;
       }
@@ -659,8 +705,14 @@ export default function ReviewClient() {
       }
     })();
 
+    const onDataUpdated = () => {
+      void loadOpenRoles();
+    };
+    window.addEventListener("rolescout-data-updated", onDataUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("rolescout-data-updated", onDataUpdated);
     };
   }, []);
 
@@ -778,6 +830,12 @@ export default function ReviewClient() {
 
   return (
     <>
+      {lastScrapedDate && (
+        <p className="text-xs text-gray-400 mt-1 mb-4">
+          Last scraped: {lastScrapedDate}
+        </p>
+      )}
+
       {savedCount > 0 && (
         <div className="mb-4 flex justify-end">
           <button

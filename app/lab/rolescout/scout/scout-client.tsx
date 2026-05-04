@@ -7,6 +7,8 @@ import {
   getLastRunSummary,
   getRoleFiltersCsv,
   getTargetCompaniesCsv,
+  setLastRunSummary,
+  setOpenRolesCsv,
 } from "../lib/storage";
 
 // ---------- Types ----------
@@ -406,33 +408,224 @@ function SkillsSection() {
 // ---------- Run Scraper ----------
 
 function RunScraperSection() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [progress, setProgress] = useState<string[]>([]);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runComplete, setRunComplete] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedLog = window.localStorage.getItem("rolescout_last_run_log");
+      const savedComplete = window.localStorage.getItem(
+        "rolescout_last_run_complete"
+      );
+      if (savedLog) {
+        const parsed = JSON.parse(savedLog);
+        if (Array.isArray(parsed)) {
+          setProgress(parsed);
+          if (savedComplete === "true") {
+            setRunComplete(true);
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  async function runScraper() {
+    setIsRunning(true);
+    setProgress([]);
+    setRunError(null);
+    setRunComplete(false);
+    try {
+      window.localStorage.removeItem("rolescout_last_run_complete");
+    } catch {
+      // ignore
+    }
+
+    const profileJson = await getCandidateProfile();
+    if (!profileJson) {
+      setRunError("No candidate profile found. Build your profile first.");
+      setIsRunning(false);
+      return;
+    }
+
+    let profile: unknown;
+    try {
+      profile = JSON.parse(profileJson);
+    } catch {
+      setRunError("Invalid candidate profile JSON.");
+      setIsRunning(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/run-scraper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile }),
+      });
+
+      if (!response.ok) {
+        setRunError("Scraper service unavailable. Try again later.");
+        setIsRunning(false);
+        return;
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+
+      const handleSseLine = async (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        const raw = line.slice(6).trim();
+        if (!raw) return;
+
+        let event: {
+          type?: string;
+          message?: string;
+          roles?: number;
+          open_roles_csv?: string;
+          last_run_summary?: unknown;
+        };
+        try {
+          event = JSON.parse(raw);
+        } catch {
+          // Non-JSON line, skip
+          return;
+        }
+
+        if (event.type === "progress" && typeof event.message === "string") {
+          const message = event.message;
+          setProgress((prev) => [...prev, message]);
+        }
+
+        if (event.type === "done") {
+          if (event.open_roles_csv) {
+            await setOpenRolesCsv(event.open_roles_csv);
+          }
+          if (event.last_run_summary) {
+            await setLastRunSummary(
+              JSON.stringify(event.last_run_summary)
+            );
+          }
+          setRunComplete(true);
+          try {
+            window.localStorage.setItem(
+              "rolescout_last_run_complete",
+              "true"
+            );
+          } catch {
+            // ignore
+          }
+          setProgress((prev) => {
+            const next = [
+              ...prev,
+              `✓ Done! ${event.roles} roles found.`,
+            ];
+            try {
+              window.localStorage.setItem(
+                "rolescout_last_run_log",
+                JSON.stringify(next)
+              );
+            } catch {
+              // ignore quota/serialization errors
+            }
+            return next;
+          });
+          window.dispatchEvent(
+            new CustomEvent("rolescout-data-updated")
+          );
+        }
+
+        if (event.type === "error" && typeof event.message === "string") {
+          setRunError(event.message);
+        }
+      };
+
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          await handleSseLine(line);
+        }
+      }
+
+      // Flush any final UTF-8 + trailing line.
+      buffer += decoder.decode();
+      if (buffer.length > 0) {
+        await handleSseLine(buffer);
+      }
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   return (
     <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
       <h3 className="text-base font-semibold text-slate-900">Run Scraper</h3>
       <p className="mt-1 text-sm text-gray-500 mb-4">
-        The scraper runs locally via Python. Clone the repo and run it
-        against your target companies and role filters.
+        Scrape open roles from your target companies. Uses your candidate
+        profile for companies and filters.
       </p>
-      <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 font-mono text-xs text-slate-700 mb-4">
-        git clone https://github.com/michaophir/rolescout-scraper<br />
-        cd sandbox<br />
-        pip install -r requirements.txt<br />
-        python scraper.py
-      </div>
-      <a
-        href="https://github.com/michaophir/rolescout-scraper"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-gray-50 transition"
-      >
-        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-        </svg>
-        View on GitHub
-      </a>
-      <p className="mt-3 text-xs text-gray-400">
-        Browser-based scraper coming in a future update.
-      </p>
+
+      {!isRunning && !runComplete && (
+        <button
+          onClick={runScraper}
+          className="rounded-full bg-slate-900 text-white px-5 py-2 text-sm font-medium hover:bg-slate-700 transition"
+        >
+          Run Scraper
+        </button>
+      )}
+
+      {isRunning && (
+        <button
+          disabled
+          className="rounded-full bg-gray-300 text-gray-500 px-5 py-2 text-sm font-medium cursor-not-allowed"
+        >
+          Running...
+        </button>
+      )}
+
+      {runComplete && (
+        <button
+          onClick={runScraper}
+          className="rounded-full border border-gray-200 text-slate-700 px-5 py-2 text-sm font-medium hover:bg-gray-50 transition"
+        >
+          Run Again
+        </button>
+      )}
+
+      {progress.length > 0 && (
+        <div className="mt-4 rounded-lg bg-gray-950 p-4 font-mono text-xs text-green-400 max-h-64 overflow-y-auto">
+          {progress.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+
+      {runError && <p className="mt-3 text-xs text-red-500">{runError}</p>}
+
+      {!isRunning && !runComplete && progress.length === 0 && (
+        <p className="mt-3 text-xs text-gray-400">
+          Runs against your target companies and role filters from your
+          candidate profile.{" "}
+          <a
+            href="/lab/rolescout/profile"
+            className="underline hover:text-slate-600"
+          >
+            Edit profile →
+          </a>
+        </p>
+      )}
     </div>
   );
 }
@@ -497,14 +690,16 @@ function LastRunSummarySection() {
       }
     };
 
-    (async () => {
+    const loadFromStorage = async (): Promise<boolean> => {
       const saved = await getLastRunSummary();
-      if (cancelled) return;
-      if (saved) {
-        apply(saved);
-        return;
-      }
+      if (cancelled || !saved) return false;
+      apply(saved);
+      return true;
+    };
 
+    (async () => {
+      const loaded = await loadFromStorage();
+      if (cancelled || loaded) return;
       try {
         const r = await fetch(DEMO_SOURCES.lastRunSummary);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -516,8 +711,14 @@ function LastRunSummarySection() {
       }
     })();
 
+    const onDataUpdated = () => {
+      void loadFromStorage();
+    };
+    window.addEventListener("rolescout-data-updated", onDataUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("rolescout-data-updated", onDataUpdated);
     };
   }, []);
 

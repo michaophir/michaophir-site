@@ -384,17 +384,35 @@ export default function DashboardClient() {
       }
     })();
 
-    const onTrackingUpdated = async () => {
-      const latest = await getTrackingCsv();
-      if (cancelled || !latest) return;
-      setTrackingRaw(latest);
-      setTrackingIsDemo(false);
+    const refreshAll = async () => {
+      if (cancelled) return;
+      const [latestSummary, latestTracking, latestOpenRoles] =
+        await Promise.all([
+          getLastRunSummary(),
+          getTrackingCsv(),
+          getOpenRolesCsv(),
+        ]);
+      if (cancelled) return;
+      if (latestSummary) {
+        setSummaryRaw(latestSummary);
+        setSummaryIsDemo(false);
+      }
+      if (latestTracking) {
+        setTrackingRaw(latestTracking);
+        setTrackingIsDemo(false);
+      }
+      if (latestOpenRoles) {
+        setOpenRolesRaw(latestOpenRoles);
+        setOpenRolesIsDemo(false);
+      }
     };
-    window.addEventListener(TRACKING_UPDATED_EVENT, onTrackingUpdated);
+    window.addEventListener(TRACKING_UPDATED_EVENT, refreshAll);
+    window.addEventListener("rolescout-data-updated", refreshAll);
 
     return () => {
       cancelled = true;
-      window.removeEventListener(TRACKING_UPDATED_EVENT, onTrackingUpdated);
+      window.removeEventListener(TRACKING_UPDATED_EVENT, refreshAll);
+      window.removeEventListener("rolescout-data-updated", refreshAll);
     };
   }, []);
 

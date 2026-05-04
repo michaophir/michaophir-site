@@ -256,6 +256,14 @@ export default function SettingsClient() {
     };
   }, []);
 
+  useEffect(() => {
+    const handler = () => {
+      void refreshData();
+    };
+    window.addEventListener("rolescout-data-updated", handler);
+    return () => window.removeEventListener("rolescout-data-updated", handler);
+  }, []);
+
   function refreshKeys() {
     setSavedKeys(readAllKeys());
   }
