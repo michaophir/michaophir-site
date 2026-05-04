@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   openaiModel: "rolescout_model_openai",
   geminiModel: "rolescout_model_gemini",
   candidateProfile: "rolescout_candidate_profile",
+  candidateProfileSavedAt: "rolescout_candidate_profile_saved_at",
   resumeFilename: "rolescout_resume_filename",
   lastRunSummary: "rolescout_last_run_summary",
   openRolesCsv: "rolescout_open_roles_csv",
@@ -40,6 +41,7 @@ const LS_PREFERENCE_KEYS: string[] = [
   STORAGE_KEYS.anthropicModel,
   STORAGE_KEYS.openaiModel,
   STORAGE_KEYS.geminiModel,
+  STORAGE_KEYS.candidateProfileSavedAt,
   STORAGE_KEYS.resumeFilename,
   "rolescout_sidebar_collapsed",
 ];
@@ -182,10 +184,16 @@ export async function getCandidateProfile(): Promise<string> {
   return getStorageItem(STORAGE_KEYS.candidateProfile);
 }
 export async function setCandidateProfile(json: string): Promise<void> {
-  return setStorageItem(STORAGE_KEYS.candidateProfile, json);
+  await setStorageItem(STORAGE_KEYS.candidateProfile, json);
+  setString(STORAGE_KEYS.candidateProfileSavedAt, new Date().toISOString());
 }
 export async function removeCandidateProfile(): Promise<void> {
-  return removeStorageItem(STORAGE_KEYS.candidateProfile);
+  await removeStorageItem(STORAGE_KEYS.candidateProfile);
+  removeKey(STORAGE_KEYS.candidateProfileSavedAt);
+}
+
+export function getCandidateProfileSavedAt(): string {
+  return getString(STORAGE_KEYS.candidateProfileSavedAt);
 }
 
 export async function getLastRunSummary(): Promise<string> {

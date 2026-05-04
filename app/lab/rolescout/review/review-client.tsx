@@ -655,11 +655,16 @@ export default function ReviewClient() {
     const onDataUpdated = () => {
       void loadLastScrapedDate();
     };
+    const onVisible = () => {
+      if (!document.hidden) void loadLastScrapedDate();
+    };
     window.addEventListener("rolescout-data-updated", onDataUpdated);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.removeEventListener("rolescout-data-updated", onDataUpdated);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
@@ -708,11 +713,16 @@ export default function ReviewClient() {
     const onDataUpdated = () => {
       void loadOpenRoles();
     };
+    const onVisible = () => {
+      if (!document.hidden) void loadOpenRoles();
+    };
     window.addEventListener("rolescout-data-updated", onDataUpdated);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.removeEventListener("rolescout-data-updated", onDataUpdated);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 

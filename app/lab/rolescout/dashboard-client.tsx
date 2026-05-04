@@ -406,13 +406,18 @@ export default function DashboardClient() {
         setOpenRolesIsDemo(false);
       }
     };
+    const onVisible = () => {
+      if (!document.hidden) void refreshAll();
+    };
     window.addEventListener(TRACKING_UPDATED_EVENT, refreshAll);
     window.addEventListener("rolescout-data-updated", refreshAll);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.removeEventListener(TRACKING_UPDATED_EVENT, refreshAll);
       window.removeEventListener("rolescout-data-updated", refreshAll);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 

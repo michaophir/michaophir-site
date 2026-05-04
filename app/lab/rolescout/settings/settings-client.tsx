@@ -7,6 +7,7 @@ import {
   getAnthropicKey,
   getAnthropicModel,
   getCandidateProfile,
+  getCandidateProfileSavedAt,
   getGeminiKey,
   getGeminiModel,
   getLastRunSummary,
@@ -145,6 +146,7 @@ function readAllModels(): KeysState {
 
 type DataRawState = {
   candidateProfile: string;
+  candidateProfileSavedAt: string;
   openRolesCsv: string;
   trackingCsv: string;
   lastRunSummary: string;
@@ -154,6 +156,7 @@ type DataRawState = {
 
 const EMPTY_DATA_RAW: DataRawState = {
   candidateProfile: "",
+  candidateProfileSavedAt: "",
   openRolesCsv: "",
   trackingCsv: "",
   lastRunSummary: "",
@@ -179,6 +182,7 @@ async function readAllDataRaw(): Promise<DataRawState> {
   ]);
   return {
     candidateProfile,
+    candidateProfileSavedAt: getCandidateProfileSavedAt(),
     openRolesCsv,
     trackingCsv,
     lastRunSummary,
@@ -190,6 +194,34 @@ async function readAllDataRaw(): Promise<DataRawState> {
 function countCsvRows(text: string): number {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
   return Math.max(0, lines.length - 1);
+}
+
+function formatDateTimeIso(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const dateStr = d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeStr = d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${dateStr} at ${timeStr}`;
+}
+
+function formatRunDateTimeFromSummary(json: string): string {
+  if (!json) return "";
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    const raw = (o.run_date ?? o.runDate) as unknown;
+    if (typeof raw !== "string") return "";
+    return formatDateTimeIso(raw);
+  } catch {
+    return "";
+  }
 }
 
 function parseLocalDate(iso: string): Date | null {
@@ -260,8 +292,15 @@ export default function SettingsClient() {
     const handler = () => {
       void refreshData();
     };
+    const onVisible = () => {
+      if (!document.hidden) void refreshData();
+    };
     window.addEventListener("rolescout-data-updated", handler);
-    return () => window.removeEventListener("rolescout-data-updated", handler);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("rolescout-data-updated", handler);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   function refreshKeys() {
@@ -555,7 +594,11 @@ export default function SettingsClient() {
             name="Candidate Profile"
             description="Skills, experience, and target roles"
             statusPresent={dataRaw.candidateProfile !== ""}
-            statusText={dataRaw.candidateProfile !== "" ? "Saved" : "Empty"}
+            statusText={
+              dataRaw.candidateProfile !== ""
+                ? formatDateTimeIso(dataRaw.candidateProfileSavedAt) || "Saved"
+                : "Empty"
+            }
             upload={{
               label: "Upload JSON",
               accept: ".json",
@@ -575,7 +618,13 @@ export default function SettingsClient() {
             statusPresent={dataRaw.openRolesCsv !== ""}
             statusText={
               dataRaw.openRolesCsv !== ""
-                ? `${countCsvRows(dataRaw.openRolesCsv)} rows`
+                ? (() => {
+                    const rows = `${countCsvRows(dataRaw.openRolesCsv)} rows`;
+                    const when = formatRunDateTimeFromSummary(
+                      dataRaw.lastRunSummary
+                    );
+                    return when ? `${rows} · ${when}` : rows;
+                  })()
                 : "Empty"
             }
             upload={{
@@ -583,6 +632,11 @@ export default function SettingsClient() {
               accept: ".csv",
               validateAsJson: false,
               onText: (text) => setOpenRolesCsv(text),
+            }}
+            download={{
+              filename: "rolescout-open-roles.csv",
+              mimeType: "text/csv",
+              getContent: () => getOpenRolesCsv(),
             }}
             onClear={async () => {
               await removeOpenRolesCsv();
@@ -622,7 +676,8 @@ export default function SettingsClient() {
             statusPresent={dataRaw.lastRunSummary !== ""}
             statusText={
               dataRaw.lastRunSummary !== ""
-                ? formatRunDateFromSummary(dataRaw.lastRunSummary)
+                ? formatRunDateTimeFromSummary(dataRaw.lastRunSummary) ||
+                  formatRunDateFromSummary(dataRaw.lastRunSummary)
                 : "Empty"
             }
             upload={{
@@ -630,6 +685,19 @@ export default function SettingsClient() {
               accept: ".json",
               validateAsJson: true,
               onText: (text) => setLastRunSummary(text),
+            }}
+            download={{
+              filename: "rolescout-last-run-summary.json",
+              mimeType: "application/json",
+              getContent: async () => {
+                const raw = await getLastRunSummary();
+                if (!raw) return "";
+                try {
+                  return JSON.stringify(JSON.parse(raw), null, 2);
+                } catch {
+                  return raw;
+                }
+              },
             }}
             onClear={async () => {
               await removeLastRunSummary();
@@ -713,12 +781,19 @@ type UploadConfig = {
   onText: (text: string) => void | Promise<void>;
 };
 
+type DownloadConfig = {
+  filename: string;
+  mimeType: string;
+  getContent: () => string | Promise<string>;
+};
+
 function DataItem({
   name,
   description,
   statusPresent,
   statusText,
   upload,
+  download,
   onClear,
   onAfterUpload,
   sampleHref,
@@ -728,12 +803,28 @@ function DataItem({
   statusPresent: boolean;
   statusText: string;
   upload?: UploadConfig;
+  download?: DownloadConfig;
   onClear?: () => void | Promise<void>;
   onAfterUpload?: () => void | Promise<void>;
   sampleHref?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  async function onDownloadClick() {
+    if (!download) return;
+    const content = await download.getContent();
+    if (!content) return;
+    const blob = new Blob([content], { type: download.mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = download.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   function onUploadClick() {
     setError(null);
@@ -763,12 +854,82 @@ function DataItem({
     reader.readAsText(file);
   }
 
+  const hasDataActions = !!(upload || download || sampleHref);
+  const showSampleLink = !!sampleHref;
+  const showClearLink = !!(statusPresent && onClear);
+  const showLinkSeparator = showSampleLink && showClearLink;
+
+  if (!hasDataActions) {
+    // Legacy compact layout (e.g. API Keys row)
+    return (
+      <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-slate-900">{name}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{description}</div>
+          <div className="mt-1 flex items-center text-xs text-gray-500">
+            <span
+              className={`w-2 h-2 rounded-full inline-block mr-1.5 ${
+                statusPresent ? "bg-green-500" : "bg-gray-300"
+              }`}
+            />
+            {statusText}
+          </div>
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        </div>
+        <div className="flex items-center shrink-0">
+          {showClearLink && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-xs text-red-500 hover:text-red-700 underline cursor-pointer ml-3"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-slate-900">{name}</div>
-        <div className="text-xs text-gray-400 mt-0.5">{description}</div>
-        <div className="mt-1 flex items-center text-xs text-gray-500">
+    <div className="py-4 border-b border-gray-100 last:border-0">
+      <div className="flex items-start justify-between gap-4">
+        <div className="text-sm font-medium text-slate-900 min-w-0">
+          {name}
+        </div>
+        <div className="flex items-center shrink-0">
+          {upload && (
+            <>
+              <button
+                type="button"
+                onClick={onUploadClick}
+                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-gray-50 transition"
+              >
+                {upload.label}
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                accept={upload.accept}
+                onChange={onFileChange}
+                className="hidden"
+              />
+            </>
+          )}
+          {statusPresent && download && (
+            <button
+              type="button"
+              onClick={onDownloadClick}
+              className="ml-2 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-gray-50 transition"
+            >
+              Download
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="text-xs text-gray-400 mt-0.5">{description}</div>
+      <div className="mt-1 flex items-center justify-between gap-4">
+        <div className="flex items-center text-xs text-gray-500 min-w-0">
           <span
             className={`w-2 h-2 rounded-full inline-block mr-1.5 ${
               statusPresent ? "bg-green-500" : "bg-gray-300"
@@ -776,46 +937,33 @@ function DataItem({
           />
           {statusText}
         </div>
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-      <div className="flex items-center shrink-0">
-        {upload && (
-          <>
+        <div className="flex items-center gap-1.5 text-xs shrink-0">
+          {showSampleLink && (
+            <a
+              href={sampleHref}
+              download
+              className="text-gray-400 hover:text-slate-700 underline"
+            >
+              Sample
+            </a>
+          )}
+          {showLinkSeparator && (
+            <span className="text-gray-300" aria-hidden="true">
+              ·
+            </span>
+          )}
+          {showClearLink && (
             <button
               type="button"
-              onClick={onUploadClick}
-              className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-gray-50 transition"
+              onClick={onClear}
+              className="text-red-500 hover:text-red-700 underline cursor-pointer"
             >
-              {upload.label}
+              Clear
             </button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={upload.accept}
-              onChange={onFileChange}
-              className="hidden"
-            />
-          </>
-        )}
-        {sampleHref && (
-          <a
-            href={sampleHref}
-            download
-            className="text-xs text-gray-400 hover:text-slate-700 underline ml-2"
-          >
-            Sample
-          </a>
-        )}
-        {statusPresent && onClear && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-xs text-red-500 hover:text-red-700 underline cursor-pointer ml-3"
-          >
-            Clear
-          </button>
-        )}
+          )}
+        </div>
       </div>
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
 }

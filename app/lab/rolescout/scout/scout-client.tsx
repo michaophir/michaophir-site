@@ -714,11 +714,16 @@ function LastRunSummarySection() {
     const onDataUpdated = () => {
       void loadFromStorage();
     };
+    const onVisible = () => {
+      if (!document.hidden) void loadFromStorage();
+    };
     window.addEventListener("rolescout-data-updated", onDataUpdated);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.removeEventListener("rolescout-data-updated", onDataUpdated);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
