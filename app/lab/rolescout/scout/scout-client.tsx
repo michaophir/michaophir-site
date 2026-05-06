@@ -28,6 +28,7 @@ type LastRunSummary = {
   runDate: string;
   companiesSucceeded: number;
   companiesFailed: number;
+  failedCompanies: string[];
   companiesTotal: number;
   rolesFetched: number;
   perAts: Record<string, number>;
@@ -45,17 +46,6 @@ const DEMO_SOURCES = {
 };
 
 // ---------- Helpers ----------
-
-function downloadCsv(filename: string, headers: string[], rows: string[][]) {
-  const csv = Papa.unparse({ fields: headers, data: rows });
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function parseCsv<T>(text: string, mapper: (row: Record<string, string>) => T): T[] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true });
@@ -99,18 +89,6 @@ function SectionCard({
   );
 }
 
-function DownloadButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-slate-700"
-    >
-      Download
-    </button>
-  );
-}
-
 function SettingsNote() {
   return (
     <p className="text-xs text-gray-400 mt-1">
@@ -126,9 +104,13 @@ function SettingsNote() {
 function ProfileSourceNote() {
   return (
     <p className="text-xs text-gray-400 mt-1">
-      From your candidate profile ·{" "}
+      Sourced from your candidate profile ·{" "}
       <a href="/lab/rolescout/profile" className="underline hover:text-slate-600">
         Edit in Profile
+      </a>
+      {" · "}
+      <a href="/lab/rolescout/settings" className="underline hover:text-slate-600">
+        Download in Settings
       </a>
     </p>
   );
@@ -200,21 +182,12 @@ function TargetCompaniesSection() {
     };
   }, []);
 
-  const handleDownload = () => {
-    downloadCsv(
-      "target_company_list.csv",
-      ["company_name", "website", "tier"],
-      rows.map((r) => [r.name, r.website, r.tier])
-    );
-  };
-
   const needsScroll = rows.length > 15;
 
   return (
     <SectionCard
       title="Target Companies"
       subtitle="Companies the scraper will poll for open roles."
-      actions={<DownloadButton onClick={handleDownload} />}
     >
       {fromProfile ? <ProfileSourceNote /> : <SettingsNote />}
       <div
@@ -315,22 +288,19 @@ function RoleFiltersSection() {
     };
   }, []);
 
-  const handleDownload = () => {
-    downloadCsv(
-      "role_filters.csv",
-      ["field", "value"],
-      rows.map((r) => [r.field, r.value])
-    );
-  };
+  const needsScroll = rows.length > 15;
 
   return (
     <SectionCard
       title="Role Filters"
       subtitle="Keywords and constraints applied after scraping to narrow the role list."
-      actions={<DownloadButton onClick={handleDownload} />}
     >
       {fromProfile ? <ProfileSourceNote /> : <SettingsNote />}
-      <div className="mt-4 overflow-hidden rounded-lg border border-gray-100">
+      <div
+        className={`mt-4 rounded-lg border border-gray-100 ${
+          needsScroll ? "max-h-[400px] overflow-y-auto" : "overflow-hidden"
+        }`}
+      >
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/60 text-xs font-medium uppercase tracking-wider text-gray-400">
@@ -571,10 +541,11 @@ function RunScraperSection() {
 
   return (
     <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
-      <h3 className="text-base font-semibold text-slate-900">Run Scraper</h3>
+      <h3 className="text-base font-semibold text-slate-900">
+        Scout Target Companies
+      </h3>
       <p className="mt-1 text-sm text-gray-500 mb-4">
-        Scrape open roles from your target companies. Uses your candidate
-        profile for companies and filters.
+        Scout your target companies for open roles matching your profile.
       </p>
 
       {!isRunning && !runComplete && (
@@ -582,7 +553,7 @@ function RunScraperSection() {
           onClick={runScraper}
           className="rounded-full bg-slate-900 text-white px-5 py-2 text-sm font-medium hover:bg-slate-700 transition"
         >
-          Run Scraper
+          Start Scouting
         </button>
       )}
 
@@ -600,12 +571,12 @@ function RunScraperSection() {
           onClick={runScraper}
           className="rounded-full border border-gray-200 text-slate-700 px-5 py-2 text-sm font-medium hover:bg-gray-50 transition"
         >
-          Run Again
+          Scout Again
         </button>
       )}
 
       {progress.length > 0 && (
-        <div className="mt-4 rounded-lg bg-gray-950 p-4 font-mono text-xs text-green-400 max-h-64 overflow-y-auto">
+        <div className="mt-4 rounded-lg bg-gray-950 p-4 font-mono text-xs text-green-400 h-[calc(100vh-340px)] min-h-[256px] overflow-y-auto">
           {progress.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
@@ -642,6 +613,9 @@ function normalizeSummary(raw: unknown): LastRunSummary {
   );
   const companiesTotal = num(data.companies_total ?? data.companiesTotal);
   const failedRaw = data.companies_failed ?? data.companiesFailed;
+  const failedCompanies: string[] = Array.isArray(failedRaw)
+    ? failedRaw.filter((x): x is string => typeof x === "string")
+    : [];
   const companiesFailed = Array.isArray(failedRaw)
     ? failedRaw.length
     : typeof failedRaw === "number"
@@ -669,6 +643,7 @@ function normalizeSummary(raw: unknown): LastRunSummary {
     runDate: str(data.run_date ?? data.runDate),
     companiesSucceeded,
     companiesFailed,
+    failedCompanies,
     companiesTotal,
     rolesFetched,
     perAts,
@@ -731,24 +706,35 @@ function LastRunSummarySection() {
 
   const runDate = data?.runDate ? new Date(data.runDate) : null;
   const validRunDate = runDate && !isNaN(runDate.getTime()) ? runDate : null;
-  const dateStr = validRunDate
-    ? validRunDate.toLocaleDateString("en-US", {
+  const formattedRunDate = validRunDate
+    ? validRunDate.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "—";
+  const dateOnly = validRunDate
+    ? validRunDate.toLocaleString(undefined, {
         month: "short",
         day: "numeric",
       })
     : "—";
-  const timeStr = validRunDate
-    ? validRunDate.toLocaleTimeString("en-US", {
+  const timeOnly = validRunDate
+    ? validRunDate.toLocaleString(undefined, {
         hour: "numeric",
         minute: "2-digit",
+        hour12: true,
       })
     : "";
 
   return (
     <section className="mb-6">
-      <h3 className="text-base font-semibold text-slate-900">Last Run Summary</h3>
+      <h3 className="text-base font-semibold text-slate-900">Last Run</h3>
       <p className="text-sm text-gray-500 mb-4">
-        {validRunDate ? `Completed ${dateStr} at ${timeStr}` : "No run yet"}
+        {validRunDate ? `Completed ${formattedRunDate}` : "No run yet"}
       </p>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
@@ -756,16 +742,8 @@ function LastRunSummarySection() {
           icon={<IconCheckCircle />}
           iconBg="bg-green-100"
           iconColor="text-green-600"
-          value={data?.companiesSucceeded ?? 0}
-          label="Companies Succeeded"
-        />
-        <StatCard
-          icon={<IconXCircle />}
-          iconBg="bg-red-100"
-          iconColor="text-red-600"
-          value={companiesFailed}
-          valueColor={companiesFailed > 0 ? "text-red-600" : "text-slate-900"}
-          label="Companies Failed"
+          value={`${data?.companiesSucceeded ?? 0}/${data?.companiesTotal ?? 0}`}
+          label="Target Companies"
         />
         <StatCard
           icon={<IconFunnel />}
@@ -778,45 +756,49 @@ function LastRunSummarySection() {
           icon={<IconCalendar />}
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
-          value={dateStr}
+          value={dateOnly}
           subValue={
             data
-              ? `${timeStr} · ${data.companiesSucceeded}/${data.companiesTotal} companies`
+              ? `${timeOnly} · ${data.companiesSucceeded}/${data.companiesTotal} companies`
               : undefined
           }
           label="Last Run"
         />
+        {data && Object.keys(data.perAts).length > 0 ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+              <IconChart />
+            </div>
+            <p className="text-sm font-medium text-slate-900 mb-2">By ATS</p>
+            <div className="space-y-1.5">
+              {Object.entries(data.perAts).map(([ats, count]) => {
+                const total = data.rolesFetched || 1;
+                const pct = Math.round(
+                  (Number(count) / Number(total)) * 100
+                );
+                return (
+                  <div key={ats}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-700 capitalize">{ats}</span>
+                      <span className="font-medium text-slate-900">
+                        {String(count)}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 h-1 w-full rounded-full bg-gray-100">
+                      <div
+                        className="h-1 rounded-full bg-blue-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div />
+        )}
       </div>
-
-      {data && Object.keys(data.perAts).length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 mb-6">
-          <h3 className="text-sm font-semibold text-slate-900 mb-4">
-            Per-ATS Breakdown
-          </h3>
-          {Object.entries(data.perAts).map(([ats, count]) => {
-            const total = data.rolesFetched || 1;
-            const pct = Math.round((Number(count) / Number(total)) * 100);
-            return (
-              <div key={ats} className="mb-3 last:mb-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-slate-700 capitalize">
-                    {ats}
-                  </span>
-                  <span className="text-sm font-medium text-slate-900">
-                    {String(count)}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full rounded-full bg-gray-100">
-                  <div
-                    className="h-1.5 rounded-full bg-blue-500"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </section>
   );
 }
@@ -871,6 +853,26 @@ function IconXCircle() {
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l6 6M15 9l-6 6" />
+    </svg>
+  );
+}
+
+function IconAlertTriangle() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"
+      />
+    </svg>
+  );
+}
+
+function IconChart() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 17V11M9 17V7M15 17v-3M21 17V3" />
     </svg>
   );
 }

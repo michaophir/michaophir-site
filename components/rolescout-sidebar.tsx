@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  getCandidateProfile,
+  getLastRunSummary,
+  getOpenRolesCsv,
+} from "@/app/lab/rolescout/lib/storage";
 
 type NavItem = {
   label: string;
@@ -197,46 +202,74 @@ function GettingStartedCard() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const [hasLastRun, setHasLastRun] = useState(false);
+  const [hasOpenRoles, setHasOpenRoles] = useState(false);
 
   useEffect(() => {
-    const get = (k: string) => {
+    let cancelled = false;
+    const lsGet = (k: string) => {
       try {
         return window.localStorage.getItem(k) ?? "";
       } catch {
         return "";
       }
     };
-    setHasApiKey(
-      Boolean(
-        get("rolescout_api_key_anthropic") ||
-          get("rolescout_api_key_openai") ||
-          get("rolescout_api_key_gemini")
-      )
-    );
-    setHasProfile(Boolean(get("rolescout_candidate_profile")));
-    setHasLastRun(Boolean(get("rolescout_last_run_summary")));
-    setMounted(true);
+    (async () => {
+      const [profile, lastRun, openRoles] = await Promise.all([
+        getCandidateProfile(),
+        getLastRunSummary(),
+        getOpenRolesCsv(),
+      ]);
+      if (cancelled) return;
+      setHasApiKey(
+        Boolean(
+          lsGet("rolescout_api_key_anthropic") ||
+            lsGet("rolescout_api_key_openai") ||
+            lsGet("rolescout_api_key_gemini")
+        )
+      );
+      setHasProfile(Boolean(profile));
+      setHasLastRun(Boolean(lastRun));
+      setHasOpenRoles(Boolean(openRoles));
+      setMounted(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!mounted) {
     return <div className="rounded-lg bg-gray-50 p-3" />;
   }
 
-  const allDone = hasApiKey && hasProfile && hasLastRun;
+  const allDone = hasProfile && hasLastRun && hasOpenRoles;
+
+  const optionalNote = !hasApiKey && (
+    <p className="text-xs text-gray-400 mt-3">
+      Optional: Add your API key in{" "}
+      <Link
+        href="/lab/rolescout/settings"
+        className="underline hover:text-slate-600"
+      >
+        Settings
+      </Link>{" "}
+      for unlimited runs →
+    </p>
+  );
 
   if (allDone) {
     return (
       <div className="rounded-lg bg-gray-50 p-3">
         <p className="text-xs font-semibold text-green-700">✓ You&apos;re all set</p>
         <p className="text-xs text-gray-500">Your job search OS is ready.</p>
+        {optionalNote}
       </div>
     );
   }
 
   const items: { label: string; href: string; done: boolean }[] = [
-    { label: "Add API key", href: "/lab/rolescout/settings", done: hasApiKey },
-    { label: "Build your profile", href: "/lab/rolescout/profile", done: hasProfile },
-    { label: "Run the scraper", href: "/lab/rolescout/scout", done: hasLastRun },
+    { label: "Upload your resume", href: "/lab/rolescout/profile", done: hasProfile },
+    { label: "Scout for open roles", href: "/lab/rolescout/scout", done: hasLastRun },
+    { label: "Review your matches", href: "/lab/rolescout/review", done: hasOpenRoles },
   ];
 
   return (
@@ -262,6 +295,7 @@ function GettingStartedCard() {
           )}
         </div>
       ))}
+      {optionalNote}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import {
+  getCandidateProfile,
   getLastRunSummary,
   getOpenRolesCsv,
   getTrackingCsv,
@@ -194,12 +195,15 @@ function formatShortDate(iso: string): string {
 }
 
 function formatLongDate(iso: string): string {
-  const d = parseLocalDate(iso);
-  if (!d) return iso;
-  return d.toLocaleDateString("en-US", {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 }
 
@@ -339,6 +343,27 @@ export default function DashboardClient() {
   const [summaryIsDemo, setSummaryIsDemo] = useState<boolean>(false);
   const [trackingIsDemo, setTrackingIsDemo] = useState<boolean>(false);
   const [openRolesIsDemo, setOpenRolesIsDemo] = useState<boolean>(false);
+  const [firstName, setFirstName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const profileJson = await getCandidateProfile();
+      if (cancelled || !profileJson) return;
+      try {
+        const profile = JSON.parse(profileJson) as { name?: string };
+        if (typeof profile.name === "string") {
+          const first = profile.name.trim().split(/\s+/)[0];
+          if (first) setFirstName(first);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -496,23 +521,26 @@ export default function DashboardClient() {
   const runDate = summary?.run_date ? new Date(summary.run_date) : null;
   const validRunDate = runDate && !isNaN(runDate.getTime()) ? runDate : null;
   const lastRunDateStr = validRunDate
-    ? validRunDate.toLocaleDateString("en-US", {
+    ? validRunDate.toLocaleString(undefined, {
         month: "short",
         day: "numeric",
       })
     : "—";
   const lastRunTimeStr = validRunDate
-    ? validRunDate.toLocaleTimeString("en-US", {
+    ? validRunDate.toLocaleString(undefined, {
         hour: "numeric",
         minute: "2-digit",
+        hour12: true,
       })
     : "";
 
-  const sectionLabelClass =
-    "text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3";
-
   return (
     <>
+      {firstName && (
+        <h1 className="text-2xl font-bold text-slate-900 mb-6">
+          Welcome back, {firstName}
+        </h1>
+      )}
       {showDemoBanner && (
         <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span>
@@ -529,7 +557,14 @@ export default function DashboardClient() {
       )}
 
       {/* Row 1 — Scraper Stats */}
-      <p className={sectionLabelClass}>Scraper — Last Run</p>
+      <h3 className="text-base font-semibold text-slate-900">
+        Last Run
+      </h3>
+      <p className="text-sm text-gray-500 mb-4">
+        {summary?.run_date
+          ? `Completed ${formatLongDate(summary.run_date)}`
+          : "No run yet"}
+      </p>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
         <StatCard
           icon={<IconSearch />}
@@ -591,7 +626,9 @@ export default function DashboardClient() {
       </div>
 
       {/* Row 2 — Applications */}
-      <p className={sectionLabelClass}>Applications</p>
+      <h3 className="text-base font-semibold text-slate-900 mb-4">
+        Applications
+      </h3>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
         <StatCard
           icon={<IconBriefcase />}

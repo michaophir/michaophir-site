@@ -437,28 +437,27 @@ function IconTrash() {
   );
 }
 
-function SpinnerSm() {
-  return (
-    <svg className="h-3 w-3 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
-      <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-    </svg>
-  );
+type StepStatus = "idle" | "running" | "done" | "failed";
+
+function StepIcon({ status }: { status: StepStatus }) {
+  if (status === "running") return <span aria-hidden>⏳</span>;
+  if (status === "done") return <span aria-hidden>✅</span>;
+  if (status === "failed") return <span aria-hidden>❌</span>;
+  return <span aria-hidden className="text-gray-400">○</span>;
 }
 
 export default function ProfileClient() {
-  const [isParsing, setIsParsing] = useState(false);
   const [tab, setTab] = useState<UploadTab>("upload");
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const [profileText, setProfileText] = useState<string>("");
   const [filename, setFilename] = useState<string>("");
   const [saveMessage, setSaveMessage] = useState<"saved" | "invalid" | null>(null);
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
-  const [generateSuccess, setGenerateSuccess] = useState(false);
+  const [parseStatus, setParseStatus] = useState<StepStatus>("idle");
+  const [configStatus, setConfigStatus] = useState<StepStatus>("idle");
+  const [parseStepError, setParseStepError] = useState<string | null>(null);
+  const [configStepError, setConfigStepError] = useState<string | null>(null);
   const [parseRemaining, setParseRemaining] = useState<number | null>(null);
   const [configRemaining, setConfigRemaining] = useState<number | null>(null);
 
@@ -486,25 +485,156 @@ export default function ProfileClient() {
     };
   }, []);
 
+  async function runConfigGeneration(
+    baseProfile: unknown,
+    apiKey: string | null
+  ): Promise<void> {
+    let config: {
+      target_companies?: unknown;
+      role_filters?: unknown;
+      preferences?: unknown;
+    };
+
+    if (apiKey) {
+      const model =
+        localStorage.getItem("rolescout_model_anthropic") ??
+        "claude-haiku-4-5-20251001";
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4000,
+          messages: [
+            {
+              role: "user",
+              content: `${GENERATE_CONFIG_PROMPT}\n\nCandidate profile:\n${JSON.stringify(baseProfile, null, 2)}`,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let msg = `HTTP ${response.status}`;
+        try {
+          const errJson = JSON.parse(errText);
+          msg = errJson?.error?.message ?? msg;
+        } catch {
+          /* fall through */
+        }
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      const text: string = data?.content?.[0]?.text?.trim() ?? "";
+      if (!text) throw new Error("Empty response from model.");
+      const clean = text
+        .replace(/^```json\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+      config = JSON.parse(clean);
+      setConfigRemaining(null);
+    } else {
+      const response = await fetch("/api/generate-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: baseProfile }),
+      });
+
+      if (response.status === 429) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setConfigRemaining(data.remaining ?? null);
+      config = data.config;
+    }
+
+    const updatedProfile = {
+      ...(baseProfile as Record<string, unknown>),
+      target_companies: config.target_companies ?? [],
+      role_filters: config.role_filters ?? [],
+      preferences: config.preferences ?? {},
+    };
+
+    const pretty = JSON.stringify(updatedProfile, null, 2);
+    setProfileText(pretty);
+    await setCandidateProfile(JSON.stringify(updatedProfile));
+  }
+
   async function handleFile(file: File) {
-    setUploadError(null);
+    setParseStatus("running");
+    setConfigStatus("idle");
+    setParseStepError(null);
+    setConfigStepError(null);
 
     const apiKey = getAnthropicKey() || null;
 
     setResumeFilename(file.name);
     setFilename(file.name);
 
-    setIsParsing(true);
+    let parsed: unknown;
     try {
-      const parsed = await parseResume(file, apiKey, setParseRemaining);
-      const pretty = JSON.stringify(parsed, null, 2);
-      setProfileText(pretty);
-      await setCandidateProfile(JSON.stringify(parsed));
+      parsed = await parseResume(file, apiKey, setParseRemaining);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      setUploadError(message);
-    } finally {
-      setIsParsing(false);
+      setParseStepError(message);
+      setParseStatus("failed");
+      return;
+    }
+
+    setParseStatus("done");
+    const pretty = JSON.stringify(parsed, null, 2);
+    setProfileText(pretty);
+    await setCandidateProfile(JSON.stringify(parsed));
+
+    setConfigStatus("running");
+    try {
+      await runConfigGeneration(parsed, apiKey);
+      setConfigStatus("done");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setConfigStepError(message);
+      setConfigStatus("failed");
+    }
+  }
+
+  async function retryConfigOnly() {
+    setConfigStatus("running");
+    setConfigStepError(null);
+
+    const apiKey = getAnthropicKey() || null;
+
+    let baseProfile: unknown;
+    try {
+      baseProfile = JSON.parse(profileText);
+    } catch {
+      setConfigStepError(
+        "Cannot retry — profile JSON is invalid. Save first."
+      );
+      setConfigStatus("failed");
+      return;
+    }
+
+    try {
+      await runConfigGeneration(baseProfile, apiKey);
+      setConfigStatus("done");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setConfigStepError(message);
+      setConfigStatus("failed");
     }
   }
 
@@ -537,7 +667,10 @@ export default function ProfileClient() {
   function handleRemoveFile() {
     removeResumeFilename();
     setFilename("");
-    setUploadError(null);
+    setParseStatus("idle");
+    setConfigStatus("idle");
+    setParseStepError(null);
+    setConfigStepError(null);
   }
 
   async function handleSave() {
@@ -563,126 +696,6 @@ export default function ProfileClient() {
     setProfileText("");
     setSaveMessage(null);
   }
-
-  async function generateScoutConfig() {
-    setGenerateError(null);
-    setGenerateSuccess(false);
-
-    const apiKey = getAnthropicKey() || null;
-
-    let profileJson: unknown;
-    try {
-      profileJson = JSON.parse(profileText);
-    } catch {
-      setGenerateError("Save a valid profile first before generating config.");
-      return;
-    }
-
-    setIsGenerating(true);
-    try {
-      let config: {
-        target_companies?: unknown;
-        role_filters?: unknown;
-        preferences?: unknown;
-      };
-
-      if (apiKey) {
-        const model =
-          localStorage.getItem("rolescout_model_anthropic") ??
-          "claude-haiku-4-5-20251001";
-
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-access": "true",
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 4000,
-            messages: [
-              {
-                role: "user",
-                content: `${GENERATE_CONFIG_PROMPT}\n\nCandidate profile:\n${JSON.stringify(profileJson, null, 2)}`,
-              },
-            ],
-          }),
-        });
-
-        if (!response.ok) {
-          const errText = await response.text();
-          let msg = `HTTP ${response.status}`;
-          try {
-            const errJson = JSON.parse(errText);
-            msg = errJson?.error?.message ?? msg;
-          } catch {
-            /* fall through */
-          }
-          throw new Error(msg);
-        }
-
-        const data = await response.json();
-        const text: string = data?.content?.[0]?.text?.trim() ?? "";
-        if (!text) throw new Error("Empty response from model.");
-        const clean = text
-          .replace(/^```json\s*/i, "")
-          .replace(/```\s*$/i, "")
-          .trim();
-        config = JSON.parse(clean);
-        setConfigRemaining(null);
-      } else {
-        const response = await fetch("/api/generate-config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile: profileJson }),
-        });
-
-        if (response.status === 429) {
-          const data = await response.json();
-          throw new Error(data.error);
-        }
-
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setConfigRemaining(data.remaining ?? null);
-        config = data.config;
-      }
-
-      const existingProfile = JSON.parse(profileText);
-      const updatedProfile = {
-        ...existingProfile,
-        target_companies: config.target_companies ?? [],
-        role_filters: config.role_filters ?? [],
-        preferences: config.preferences ?? {},
-      };
-
-      const pretty = JSON.stringify(updatedProfile, null, 2);
-      setProfileText(pretty);
-      await setCandidateProfile(JSON.stringify(updatedProfile));
-      setGenerateSuccess(true);
-      window.setTimeout(() => setGenerateSuccess(false), 3000);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setGenerateError(message);
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
-  const hasValidProfileJson = useMemo(() => {
-    if (!profileText.trim()) return false;
-    try {
-      JSON.parse(profileText);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [profileText]);
 
   const dropZoneClass = useMemo(() => {
     const base =
@@ -715,25 +728,13 @@ export default function ProfileClient() {
             type="button"
             disabled
             title="Coming soon"
-            className="rounded-full text-gray-400 px-4 py-1.5 text-sm font-medium cursor-not-allowed"
+            className="hidden rounded-full text-gray-400 px-4 py-1.5 text-sm font-medium cursor-not-allowed"
           >
             Paste LinkedIn URL
           </button>
         </div>
 
-        {isParsing ? (
-          <div className="mt-4 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <SpinnerSm />
-              <p className="text-base font-semibold text-slate-900">
-                Parsing your Resume...
-              </p>
-            </div>
-            <p className="text-sm text-gray-400 mt-1">
-              This takes about 10–15 seconds.
-            </p>
-          </div>
-        ) : hasFile ? (
+        {hasFile ? (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center min-w-0">
@@ -787,31 +788,93 @@ export default function ProfileClient() {
           className="hidden"
         />
 
-        {parseRemaining !== null && (
-          <p
-            className={`text-xs mt-2 ${
-              parseRemaining === 0 ? "text-amber-600" : "text-gray-400"
-            }`}
-          >
-            {parseRemaining === 0
-              ? "Free parse limit reached — add your Anthropic key in Settings for unlimited runs."
-              : `${parseRemaining} free resume parse${
-                  parseRemaining === 1 ? "" : "s"
-                } remaining today.`}
-          </p>
+        {(parseStatus !== "idle" || configStatus !== "idle") && (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+            <div className="flex items-center gap-3 text-sm">
+              <StepIcon status={parseStatus} />
+              <span className={parseStatus === "failed" ? "text-red-600" : ""}>
+                {parseStatus === "running" && "Parsing resume..."}
+                {parseStatus === "done" && "Resume parsed"}
+                {parseStatus === "failed" &&
+                  (parseStepError
+                    ? `Resume parsing failed — ${parseStepError}`
+                    : "Resume parsing failed — please try again")}
+                {parseStatus === "idle" && "Parsing resume..."}
+              </span>
+            </div>
+
+            <div
+              className={`flex items-center gap-3 text-sm ${
+                parseStatus === "failed" ? "opacity-40" : ""
+              }`}
+            >
+              <StepIcon
+                status={parseStatus === "failed" ? "idle" : configStatus}
+              />
+              <span className={configStatus === "failed" ? "text-red-600" : ""}>
+                {configStatus === "running" &&
+                  "Generating target companies & role filters..."}
+                {configStatus === "done" &&
+                  "Target companies & role filters generated"}
+                {configStatus === "failed" &&
+                  "Config generation failed — your profile is saved, retry below"}
+                {configStatus === "idle" &&
+                  "Generating target companies & role filters..."}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 text-sm">
+              <StepIcon
+                status={
+                  parseStatus === "done" && configStatus === "done"
+                    ? "done"
+                    : "idle"
+                }
+              />
+              <span>
+                {parseStatus === "done" && configStatus === "done"
+                  ? "Done — review your profile below"
+                  : "Done"}
+              </span>
+            </div>
+
+            {configStatus === "failed" && configStepError && (
+              <p className="text-xs text-gray-400 pl-7">{configStepError}</p>
+            )}
+
+            {configStatus === "failed" && (
+              <button
+                type="button"
+                onClick={retryConfigOnly}
+                className="mt-2 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-gray-50 transition"
+              >
+                Retry config generation
+              </button>
+            )}
+          </div>
         )}
 
-        {uploadError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 mt-4">
-            {uploadError.includes("limit reached")
-              ? uploadError
-              : `Parsing failed: ${uploadError}. Check your API key in Settings and try again.`}
-          </div>
+        {(parseRemaining !== null || configRemaining !== null) && (
+          <p
+            className={`text-xs mt-2 ${
+              parseRemaining === 0 || configRemaining === 0
+                ? "text-amber-600"
+                : "text-gray-400"
+            }`}
+          >
+            {parseRemaining === 0 || configRemaining === 0
+              ? "Free limit reached — add your Anthropic key in Settings for unlimited runs."
+              : `${parseRemaining ?? "—"} free parse${
+                  parseRemaining === 1 ? "" : "s"
+                } remaining · ${configRemaining ?? "—"} free config${
+                  configRemaining === 1 ? "" : "s"
+                } remaining today.`}
+          </p>
         )}
       </div>
 
       <p className="text-xs text-gray-400 mt-3 mb-6">
-        Skills are inferred by AI from what you provide — always editable.
+        Skills are inferred by AI from what you provide - editable in Candidate Profile.
       </p>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -861,82 +924,21 @@ export default function ProfileClient() {
         )}
       </div>
 
-      {hasValidProfileJson && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 mt-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Scout Config</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Generate target companies and role filters from your profile.
-                Free to use · 3 runs per day · Results merged into your profile.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={generateScoutConfig}
-              disabled={isGenerating || profileText.trim() === ""}
-              className={
-                isGenerating || profileText.trim() === ""
-                  ? "rounded-full bg-gray-200 text-gray-400 px-4 py-2 text-sm font-medium cursor-not-allowed shrink-0 ml-4"
-                  : "rounded-full bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 transition shrink-0 ml-4"
-              }
-            >
-              {isGenerating ? (
-                <span className="flex items-center gap-2">
-                  <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeOpacity="0.25"
-                      strokeWidth="4"
-                    />
-                    <path
-                      d="M12 2a10 10 0 0110 10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  Generating...
-                </span>
-              ) : (
-                "Generate →"
-              )}
-            </button>
-          </div>
-
-          {configRemaining !== null && (
-            <p
-              className={`text-xs mt-2 ${
-                configRemaining === 0 ? "text-amber-600" : "text-gray-400"
-              }`}
-            >
-              {configRemaining === 0
-                ? "Free generation limit reached — add your Anthropic key in Settings for unlimited runs."
-                : `${configRemaining} free config generation${
-                    configRemaining === 1 ? "" : "s"
-                  } remaining today.`}
-            </p>
-          )}
-
-          {generateSuccess && (
-            <p className="text-xs text-green-600 mt-3">
-              ✓ Target companies and role filters added to your profile.
-            </p>
-          )}
-          {generateError && (
-            <p className="text-xs text-red-500 mt-3">{generateError}</p>
-          )}
-          {!generateError && !generateSuccess && (
-            <p className="text-xs text-gray-400 mt-3">
-              Generates 30-50 target companies, role title filters, domain and skill
-              keywords, and job search preferences — all inferred from your resume.
-            </p>
-          )}
-        </div>
-      )}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 mt-4">
+        <h3 className="text-lg font-semibold text-slate-900">Scout Config Prompt</h3>
+        <p className="text-sm text-gray-500 mt-1 mb-4">
+          This prompt controls how your target companies and role filters are
+          generated from your profile.
+        </p>
+        <textarea
+          readOnly
+          defaultValue={GENERATE_CONFIG_PROMPT}
+          className="w-full h-64 font-mono text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-xl p-4 resize-none"
+        />
+        <p className="text-xs text-gray-400 mt-2">
+          Prompt editing and custom config generation coming soon
+        </p>
+      </div>
     </div>
   );
 }

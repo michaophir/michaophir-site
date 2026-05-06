@@ -211,16 +211,14 @@ function formatDateTimeIso(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
-  const dateStr = d.toLocaleDateString("en-US", {
-    month: "long",
+  return d.toLocaleString(undefined, {
+    month: "short",
     day: "numeric",
     year: "numeric",
-  });
-  const timeStr = d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
-  return `${dateStr} at ${timeStr}`;
 }
 
 function formatRunDateTimeFromSummary(json: string): string {
@@ -248,12 +246,15 @@ function formatRunDateFromSummary(json: string): string {
     const o = JSON.parse(json) as Record<string, unknown>;
     const raw = (o.run_date ?? o.runDate) as unknown;
     if (typeof raw === "string") {
-      const d = parseLocalDate(raw);
-      if (d) {
-        return d.toLocaleDateString("en-US", {
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString(undefined, {
           month: "short",
           day: "numeric",
           year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
         });
       }
     }
@@ -571,36 +572,10 @@ export default function SettingsClient() {
           All RoleScout data is stored locally in your browser. Clear individual items or wipe everything.
         </p>
 
-        <div className="mb-6 pb-6 border-b border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-900">Demo data</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Populate all fields with sample data from RoleScout
-              </p>
-            </div>
-            <button
-              onClick={handleLoadDemo}
-              disabled={demoLoading}
-              className="rounded-full border border-gray-200 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-gray-50 transition disabled:opacity-50"
-            >
-              {demoLoading ? "Loading..." : "Load demo data"}
-            </button>
-          </div>
-          {demoStatus && (
-            <p
-              className={`text-xs mt-2 ${
-                demoStatus === "error" ? "text-red-500" : "text-green-600"
-              }`}
-            >
-              {demoStatus === "error"
-                ? "Failed to load some demo data."
-                : demoStatus}
-            </p>
-          )}
-        </div>
-
         <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+            Profile
+          </p>
           <DataItem
             name="Candidate Profile"
             description="Skills, experience, and target roles"
@@ -616,6 +591,19 @@ export default function SettingsClient() {
               validateAsJson: true,
               onText: (text) => setCandidateProfile(text),
             }}
+            download={{
+              filename: "rolescout-candidate-profile.json",
+              mimeType: "application/json",
+              getContent: async () => {
+                const raw = await getCandidateProfile();
+                if (!raw) return "";
+                try {
+                  return JSON.stringify(JSON.parse(raw), null, 2);
+                } catch {
+                  return raw;
+                }
+              },
+            }}
             onClear={async () => {
               await removeCandidateProfile();
               await refreshData();
@@ -623,6 +611,10 @@ export default function SettingsClient() {
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.candidateProfile}
           />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mt-6 mb-2">
+            Scraper Data
+          </p>
           <DataItem
             name="Open Roles CSV"
             description="Last scraper output"
@@ -657,31 +649,6 @@ export default function SettingsClient() {
             }}
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.openRolesCsv}
-          />
-          <DataItem
-            name="Tracking CSV"
-            description="Your application history"
-            statusPresent={dataRaw.trackingCsv !== ""}
-            statusText={
-              dataRaw.trackingCsv !== ""
-                ? `${countCsvRows(dataRaw.trackingCsv)} rows`
-                : "Empty"
-            }
-            upload={{
-              label: "Upload CSV",
-              accept: ".csv",
-              validateAsJson: false,
-              onText: async (text) => {
-                await setTrackingCsv(text);
-                window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
-              },
-            }}
-            onClear={async () => {
-              await removeTrackingCsv();
-              await refreshData();
-            }}
-            onAfterUpload={refreshData}
-            sampleHref={DEMO_SOURCES.trackingCsv}
           />
           <DataItem
             name="Last Run Summary"
@@ -734,6 +701,39 @@ export default function SettingsClient() {
               validateAsJson: false,
               onText: (text) => setTargetCompaniesCsv(text),
             }}
+            download={{
+              filename: "rolescout-target-companies.csv",
+              mimeType: "text/csv",
+              getContent: async () => {
+                const raw = await getTargetCompaniesCsv();
+                if (!raw) return "";
+                const trimmed = raw.trim();
+                if (trimmed.startsWith("[")) {
+                  try {
+                    const arr = JSON.parse(trimmed);
+                    if (Array.isArray(arr)) {
+                      return Papa.unparse({
+                        fields: ["company_name", "website", "tier"],
+                        data: arr.map(
+                          (r: {
+                            company_name?: string;
+                            website?: string;
+                            tier?: string | number;
+                          }) => [
+                            r.company_name ?? "",
+                            r.website ?? "",
+                            r.tier !== undefined ? String(r.tier) : "",
+                          ]
+                        ),
+                      });
+                    }
+                  } catch {
+                    // fall through to raw
+                  }
+                }
+                return raw;
+              },
+            }}
             onClear={async () => {
               await removeTargetCompaniesCsv();
               await refreshData();
@@ -756,6 +756,34 @@ export default function SettingsClient() {
               validateAsJson: false,
               onText: (text) => setRoleFiltersCsv(text),
             }}
+            download={{
+              filename: "rolescout-role-filters.csv",
+              mimeType: "text/csv",
+              getContent: async () => {
+                const raw = await getRoleFiltersCsv();
+                if (!raw) return "";
+                const trimmed = raw.trim();
+                if (trimmed.startsWith("[")) {
+                  try {
+                    const arr = JSON.parse(trimmed);
+                    if (Array.isArray(arr)) {
+                      return Papa.unparse({
+                        fields: ["field", "value"],
+                        data: arr.map(
+                          (r: { field?: string; value?: string }) => [
+                            r.field ?? "",
+                            r.value ?? "",
+                          ]
+                        ),
+                      });
+                    }
+                  } catch {
+                    // fall through to raw
+                  }
+                }
+                return raw;
+              },
+            }}
             onClear={async () => {
               await removeRoleFiltersCsv();
               await refreshData();
@@ -763,6 +791,44 @@ export default function SettingsClient() {
             onAfterUpload={refreshData}
             sampleHref={DEMO_SOURCES.roleFilters}
           />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mt-6 mb-2">
+            Application Tracking
+          </p>
+          <DataItem
+            name="Applications Tracking CSV"
+            description="Your application history"
+            statusPresent={dataRaw.trackingCsv !== ""}
+            statusText={
+              dataRaw.trackingCsv !== ""
+                ? `${countCsvRows(dataRaw.trackingCsv)} rows`
+                : "Empty"
+            }
+            upload={{
+              label: "Upload CSV",
+              accept: ".csv",
+              validateAsJson: false,
+              onText: async (text) => {
+                await setTrackingCsv(text);
+                window.dispatchEvent(new CustomEvent(TRACKING_UPDATED_EVENT));
+              },
+            }}
+            download={{
+              filename: "rolescout-applications-tracking.csv",
+              mimeType: "text/csv",
+              getContent: () => getTrackingCsv(),
+            }}
+            onClear={async () => {
+              await removeTrackingCsv();
+              await refreshData();
+            }}
+            onAfterUpload={refreshData}
+            sampleHref={DEMO_SOURCES.trackingCsv}
+          />
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mt-6 mb-2">
+            System
+          </p>
           <DataItem
             name="API Keys"
             description="All saved provider keys"
@@ -770,6 +836,35 @@ export default function SettingsClient() {
             statusText={keysSummaryText(savedKeys)}
             onClear={handleClearAllKeys}
           />
+        </div>
+
+        <div className="py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Demo data</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Populate all fields with sample data from RoleScout
+              </p>
+            </div>
+            <button
+              onClick={handleLoadDemo}
+              disabled={demoLoading}
+              className="rounded-full border border-gray-200 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-gray-50 transition disabled:opacity-50"
+            >
+              {demoLoading ? "Loading..." : "Load demo data"}
+            </button>
+          </div>
+          {demoStatus && (
+            <p
+              className={`text-xs mt-2 ${
+                demoStatus === "error" ? "text-red-500" : "text-green-600"
+              }`}
+            >
+              {demoStatus === "error"
+                ? "Failed to load some demo data."
+                : demoStatus}
+            </p>
+          )}
         </div>
 
         <button
@@ -875,7 +970,7 @@ function DataItem({
   if (!hasDataActions) {
     // Legacy compact layout (e.g. API Keys row)
     return (
-      <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
+      <div className="flex items-center justify-between py-4 border-b border-gray-200">
         <div className="min-w-0">
           <div className="text-sm font-medium text-slate-900">{name}</div>
           <div className="text-xs text-gray-400 mt-0.5">{description}</div>
@@ -905,7 +1000,7 @@ function DataItem({
   }
 
   return (
-    <div className="py-4 border-b border-gray-100 last:border-0">
+    <div className="py-4 border-b border-gray-200">
       <div className="flex items-start justify-between gap-4">
         <div className="text-sm font-medium text-slate-900 min-w-0">
           {name}

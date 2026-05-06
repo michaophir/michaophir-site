@@ -620,6 +620,7 @@ export default function ReviewClient() {
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
   const [searchFilter, setSearchFilter] = useState("");
   const [lastScrapedDate, setLastScrapedDate] = useState<string | null>(null);
+  const [mobileVisibleCount, setMobileVisibleCount] = useState(6);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const savedCount = savedIds.size;
@@ -809,6 +810,23 @@ export default function ReviewClient() {
     return result;
   }, [jobs, activeWorkplace, activeDates, searchFilter]);
 
+  const allRolesByMatch = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const aHas = a.match_score !== null;
+      const bHas = b.match_score !== null;
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      if (!aHas && !bHas) return 0;
+      return (b.match_score as number) - (a.match_score as number);
+    });
+  }, [filtered]);
+
+  useEffect(() => {
+    setMobileVisibleCount(6);
+  }, [filtered]);
+
+  const mobileVisibleRoles = allRolesByMatch.slice(0, mobileVisibleCount);
+
   const { bestMatch, topPaying, newThisWeek } = useMemo(() => {
     const seen = new Set<string>();
 
@@ -928,16 +946,44 @@ export default function ReviewClient() {
               savedIds={savedIds}
               onToggle={toggleSave}
             />
-            <div className="hidden md:block mt-8">
+            <div className="hidden lg:block mt-8">
               <ListingsTable
                 jobs={filtered}
                 savedIds={savedIds}
                 onToggle={toggleSave}
               />
             </div>
-            <div className="block md:hidden mt-6 text-center text-xs text-gray-400">
-              Full listings table available on desktop.
-            </div>
+            {allRolesByMatch.length > 0 && (
+              <section className="block lg:hidden mb-10">
+                <SectionHeader title="All Roles" />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {mobileVisibleRoles.map((job) => (
+                    <JobCard
+                      key={job.job_id}
+                      job={job}
+                      savedIds={savedIds}
+                      onToggle={toggleSave}
+                      showMatchScore
+                    />
+                  ))}
+                </div>
+                {mobileVisibleCount < allRolesByMatch.length && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMobileVisibleCount((c) => c + 6)
+                    }
+                    className="mt-6 w-full rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-gray-50 transition"
+                  >
+                    Load more
+                  </button>
+                )}
+                <p className="mt-2 text-sm text-gray-400 text-center">
+                  Showing {mobileVisibleRoles.length} of{" "}
+                  {allRolesByMatch.length} roles
+                </p>
+              </section>
+            )}
           </>
         )}
       </div>

@@ -14,7 +14,7 @@ export default function ScoutPage() {
           Scout
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Configure target companies, role filters, and run the scraper.
+          Configure target companies, role filters, and scout for open roles.
         </p>
       </div>
       <ScoutClient />
