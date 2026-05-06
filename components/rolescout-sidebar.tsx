@@ -227,9 +227,20 @@ function GettingStartedCard() {
             lsGet("rolescout_api_key_gemini")
         )
       );
-      setHasProfile(Boolean(profile));
-      setHasLastRun(Boolean(lastRun));
-      setHasOpenRoles(Boolean(openRoles));
+
+      let profileName = "";
+      try {
+        const parsed = JSON.parse(profile || "{}");
+        profileName = String(parsed?.name ?? "").trim();
+      } catch {
+        profileName = "";
+      }
+      const isDemoProfile = profileName === "Alex Rivera";
+      const lastRunComplete = lsGet("rolescout_last_run_complete") === "true";
+
+      setHasProfile(Boolean(profile) && !isDemoProfile);
+      setHasLastRun(Boolean(lastRun) && lastRunComplete);
+      setHasOpenRoles(Boolean(openRoles) && lastRunComplete);
       setMounted(true);
     })();
     return () => {
@@ -327,7 +338,7 @@ function ExpandedContent({
           </button>
         )}
       </div>
-      <nav className="flex-1 px-3">
+      <nav className="px-3">
         <ExpandedNavList items={NAV_ITEMS} pathname={pathname} onNavClick={onNavClick} />
         <div className="mx-3 my-2 h-px bg-gray-100" />
         <ExpandedNavList
@@ -336,7 +347,7 @@ function ExpandedContent({
           onNavClick={onNavClick}
         />
       </nav>
-      <div className="p-4">
+      <div className="px-4 pt-6 pb-4">
         <GettingStartedCard />
       </div>
     </>
