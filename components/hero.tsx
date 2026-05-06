@@ -11,7 +11,7 @@ export default function Hero() {
       </p>
       <div className="mt-8">
         <a
-          href="mailto:micha@michaophir.com"
+          href="mailto:info@michaophir.com"
           className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-gray-700"
         >
           Get in touch

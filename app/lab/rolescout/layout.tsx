@@ -1,4 +1,5 @@
 import Navbar from "@/components/navbar";
+import RolescoutBetaBanner from "@/components/rolescout-beta-banner";
 import RoleScoutSidebar, { MobileSidebarTrigger } from "@/components/rolescout-sidebar";
 
 export default function RoleScoutLayout({
@@ -8,6 +9,7 @@ export default function RoleScoutLayout({
 }) {
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
+      <RolescoutBetaBanner />
       <Navbar />
       <div className="flex">
         <RoleScoutSidebar />
