@@ -199,7 +199,6 @@ function CollapsedNavList({
 
 function GettingStartedCard() {
   const [mounted, setMounted] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const [hasLastRun, setHasLastRun] = useState(false);
   const [hasOpenRoles, setHasOpenRoles] = useState(false);
@@ -220,13 +219,6 @@ function GettingStartedCard() {
         getOpenRolesCsv(),
       ]);
       if (cancelled) return;
-      setHasApiKey(
-        Boolean(
-          lsGet("rolescout_api_key_anthropic") ||
-            lsGet("rolescout_api_key_openai") ||
-            lsGet("rolescout_api_key_gemini")
-        )
-      );
 
       let profileName = "";
       try {
@@ -254,25 +246,11 @@ function GettingStartedCard() {
 
   const allDone = hasProfile && hasLastRun && hasOpenRoles;
 
-  const optionalNote = !hasApiKey && (
-    <p className="text-xs text-gray-400 mt-3">
-      Optional: Add your API key in{" "}
-      <Link
-        href="/lab/rolescout/settings"
-        className="underline hover:text-slate-600"
-      >
-        Settings
-      </Link>{" "}
-      for unlimited runs →
-    </p>
-  );
-
   if (allDone) {
     return (
       <div className="rounded-lg bg-gray-50 p-3">
         <p className="text-xs font-semibold text-green-700">✓ You&apos;re all set</p>
         <p className="text-xs text-gray-500">Your job search OS is ready.</p>
-        {optionalNote}
       </div>
     );
   }
@@ -306,7 +284,6 @@ function GettingStartedCard() {
           )}
         </div>
       ))}
-      {optionalNote}
     </div>
   );
 }
@@ -347,7 +324,7 @@ function ExpandedContent({
           onNavClick={onNavClick}
         />
       </nav>
-      <div className="px-4 pt-6 pb-4">
+      <div className="mt-auto px-4 pb-4">
         <GettingStartedCard />
       </div>
     </>
