@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Papa from "papaparse";
 import type { ApiProvider } from "../lib/storage";
 import {
   clearAllRolescout,
@@ -194,6 +195,16 @@ async function readAllDataRaw(): Promise<DataRawState> {
 function countCsvRows(text: string): number {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
   return Math.max(0, lines.length - 1);
+}
+
+function countOpenRolesAccepting(csv: string): number {
+  if (!csv) return 0;
+  const result = Papa.parse(csv, { header: true, skipEmptyLines: true });
+  const rows = result.data as Record<string, unknown>[];
+  return rows.reduce((acc, raw) => {
+    const accepting = String(raw["accepting_applications"] ?? "").trim();
+    return accepting !== "false" ? acc + 1 : acc;
+  }, 0);
 }
 
 function formatDateTimeIso(iso: string): string {
@@ -619,7 +630,9 @@ export default function SettingsClient() {
             statusText={
               dataRaw.openRolesCsv !== ""
                 ? (() => {
-                    const rows = `${countCsvRows(dataRaw.openRolesCsv)} rows`;
+                    const rows = `${countOpenRolesAccepting(
+                      dataRaw.openRolesCsv
+                    )} rows`;
                     const when = formatRunDateTimeFromSummary(
                       dataRaw.lastRunSummary
                     );

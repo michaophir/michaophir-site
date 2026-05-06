@@ -675,7 +675,11 @@ export default function ReviewClient() {
       const result = Papa.parse(text, { header: true, skipEmptyLines: true });
       const parsed = (result.data as Record<string, unknown>[]).map(parseRow);
       if (cancelled) return;
-      setJobs(parsed.filter((j) => j.job_id));
+      setJobs(
+        parsed.filter(
+          (j) => j.job_id && j.accepting_applications !== "false"
+        )
+      );
     };
 
     const loadOpenRoles = async (): Promise<boolean> => {
@@ -886,7 +890,7 @@ export default function ReviewClient() {
           />
           {!loading && (
             <p className="mt-3 text-sm text-gray-400">
-              Showing {filtered.length} opportunities matching your criteria
+              Showing {filtered.length} roles matching your criteria
             </p>
           )}
         </div>

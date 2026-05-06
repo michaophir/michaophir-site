@@ -14,7 +14,7 @@ import {
 type LastRunSummary = {
   per_company?: Array<{ roles_total?: number }>;
   roles_fetched_post_filter?: number;
-  match_score_stats?: { high_matches?: number };
+  match_score_stats?: { high_matches?: number; avg_score?: number };
   run_date?: string;
   companies_succeeded?: number;
   companies_total?: number;
@@ -45,6 +45,7 @@ type OpenRole = {
   company: string;
   job_title: string;
   match_score: number | null;
+  accepting_applications: string;
 };
 
 type DisplayMatch = { role: string; company: string; match: number };
@@ -161,6 +162,7 @@ function parseOpenRolesCsv(csv: string): OpenRole[] {
       company: g("company"),
       job_title: g("job_title"),
       match_score: n !== null && Number.isFinite(n) ? n : null,
+      accepting_applications: g("accepting_applications"),
     };
   });
 }
@@ -226,8 +228,8 @@ function StatCard({
         {icon}
       </div>
       <p className="text-3xl font-bold tracking-tight text-slate-900">{value}</p>
-      {subValue && <p className="text-xs text-gray-400 mt-0.5">{subValue}</p>}
       <p className="mt-1 text-sm text-gray-500">{label}</p>
+      {subValue && <p className="text-xs text-gray-400 mt-0.5">{subValue}</p>}
     </div>
   );
 }
@@ -454,6 +456,7 @@ export default function DashboardClient() {
   const topMatches: DisplayMatch[] = useMemo(() => {
     if (!hasOpenRoles) return [];
     return openRoles
+      .filter((r) => r.accepting_applications !== "false")
       .filter((r) => r.match_score !== null)
       .sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0))
       .slice(0, 3)
@@ -533,9 +536,17 @@ export default function DashboardClient() {
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
           value={
-            hasSummary && typeof totalRolesScraped === "number" ? totalRolesScraped : "—"
+            hasSummary && typeof totalRolesScraped === "number"
+              ? totalRolesScraped.toLocaleString()
+              : "—"
           }
-          label="Total Roles Scraped"
+          subValue={
+            hasSummary &&
+            typeof summary?.companies_succeeded === "number"
+              ? `across ${summary.companies_succeeded} target companies`
+              : undefined
+          }
+          label="Roles Found"
         />
         <StatCard
           icon={<IconFunnel />}
@@ -556,6 +567,12 @@ export default function DashboardClient() {
             hasSummary && typeof summary?.match_score_stats?.high_matches === "number"
               ? summary.match_score_stats.high_matches
               : "—"
+          }
+          subValue={
+            hasSummary &&
+            typeof summary?.match_score_stats?.avg_score === "number"
+              ? `avg score ${summary.match_score_stats.avg_score}`
+              : undefined
           }
           label="High Matches"
         />

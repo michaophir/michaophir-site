@@ -852,8 +852,8 @@ function StatCard({
       >
         {value}
       </p>
-      {subValue && <p className="text-xs text-gray-400 mt-0.5">{subValue}</p>}
       <p className="mt-1 text-sm text-gray-500">{label}</p>
+      {subValue && <p className="text-xs text-gray-400 mt-0.5">{subValue}</p>}
     </div>
   );
 }
