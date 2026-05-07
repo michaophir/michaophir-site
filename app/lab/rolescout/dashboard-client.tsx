@@ -536,11 +536,14 @@ export default function DashboardClient() {
 
   return (
     <>
-      {firstName && (
-        <h1 className="text-2xl font-bold text-slate-900 mb-6">
-          Welcome back, {firstName}
-        </h1>
-      )}
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+          {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Here&apos;s your job search at a glance.
+        </p>
+      </div>
       {showDemoBanner && (
         <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span>
