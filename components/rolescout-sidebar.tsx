@@ -260,7 +260,7 @@ function GettingStartedCard() {
     return (
       <div className="rounded-lg bg-gray-50 p-3">
         <p className="text-xs font-semibold text-green-700">✓ You&apos;re all set</p>
-        <p className="text-xs text-gray-500">Your job search OS is ready.</p>
+        <p className="text-xs text-gray-500">Scout. Review. Apply on your terms.</p>
       </div>
     );
   }
@@ -312,7 +312,7 @@ function ExpandedContent({
       <div className="flex items-start justify-between px-6 py-6">
         <div>
           <h1 className="text-lg font-bold tracking-tight text-slate-900">RoleScout</h1>
-          <p className="text-xs text-gray-400">Job Search OS</p>
+          <p className="text-xs text-gray-400">Scout. Review. Apply on your terms.</p>
         </div>
         {onCollapse && (
           <button

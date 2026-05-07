@@ -3,7 +3,7 @@ import DashboardClient from "./dashboard-client";
 
 export const metadata: Metadata = {
   title: "RoleScout — Dashboard",
-  description: "AI-powered job search OS.",
+  description: "Scout. Review. Apply on your terms.",
 };
 
 export default function RoleScoutDashboard() {

@@ -3,7 +3,7 @@ import ProfileClient from "./profile-client";
 
 export const metadata: Metadata = {
   title: "RoleScout — Profile & Skills",
-  description: "Resume, skills, and story bank for smarter job matching.",
+  description: "Upload your resume. We'll extract your skills, build your candidate profile, and generate your target companies.",
 };
 
 export default function ProfilePage() {
@@ -14,7 +14,7 @@ export default function ProfilePage() {
           Profile &amp; Skills
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Upload your Resume to build your candidate profile. The AI extracts your skills, experience, and story bank.
+          Upload your resume. We&apos;ll extract your skills, build your candidate profile, and generate your target companies.
         </p>
       </div>
       <ProfileClient />

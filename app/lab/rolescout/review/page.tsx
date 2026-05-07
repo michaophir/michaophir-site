@@ -14,7 +14,7 @@ export default function ReviewPage() {
           Discover Roles
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Review and save roles from your last scraper run.
+          Review and save roles from your last scout run.
         </p>
       </div>
       <ReviewClient />

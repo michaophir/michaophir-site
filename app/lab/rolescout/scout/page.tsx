@@ -3,7 +3,7 @@ import ScoutClient from "./scout-client";
 
 export const metadata: Metadata = {
   title: "RoleScout — Scout",
-  description: "Configure target companies and role filters for scraping.",
+  description: "Run the scout and review your last run.",
 };
 
 export default function ScoutPage() {
@@ -14,7 +14,7 @@ export default function ScoutPage() {
           Scout
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Configure target companies, role filters, and scout for open roles.
+          Run the scout and review your last run.
         </p>
       </div>
       <ScoutClient />

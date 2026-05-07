@@ -541,7 +541,7 @@ export default function DashboardClient() {
           {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Here&apos;s your job search at a glance.
+          Scout. Review. Apply on your terms.
         </p>
       </div>
       {showDemoBanner && (

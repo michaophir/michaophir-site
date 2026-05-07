@@ -3,6 +3,9 @@ title: "FAQ"
 order: 7
 ---
 
+## Does RoleScout apply to jobs for me?
+No. RoleScout scouts — it finds and ranks roles that match your profile. You review, save, and apply yourself. Auto-apply tools optimize for volume; RoleScout optimizes for signal. You stay in the loop.
+
 ## Do you store my resume or job data?
 No. All data is stored locally in your browser using IndexedDB. Your resume is sent to Anthropic's API for parsing but is not stored by RoleScout.
 
