@@ -655,7 +655,7 @@ function RunScraperSection() {
           onClick={runScraper}
           className="rounded-full bg-slate-900 text-white px-5 py-2 text-sm font-medium hover:bg-slate-700 transition"
         >
-          Start Scouting
+          Run Scout
         </button>
       )}
 
@@ -671,9 +671,9 @@ function RunScraperSection() {
       {runComplete && (
         <button
           onClick={runScraper}
-          className="rounded-full border border-gray-200 text-slate-700 px-5 py-2 text-sm font-medium hover:bg-gray-50 transition"
+          className="rounded-full bg-slate-900 text-white px-5 py-2 text-sm font-medium hover:bg-slate-700 transition"
         >
-          Scout Again
+          Run Scout
         </button>
       )}
 

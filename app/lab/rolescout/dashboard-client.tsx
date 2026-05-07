@@ -340,21 +340,34 @@ export default function DashboardClient() {
   const [summaryRaw, setSummaryRaw] = useState<string>("");
   const [trackingRaw, setTrackingRaw] = useState<string>("");
   const [openRolesRaw, setOpenRolesRaw] = useState<string>("");
-  const [summaryIsDemo, setSummaryIsDemo] = useState<boolean>(false);
   const [trackingIsDemo, setTrackingIsDemo] = useState<boolean>(false);
   const [openRolesIsDemo, setOpenRolesIsDemo] = useState<boolean>(false);
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [profileIsDemo, setProfileIsDemo] = useState<boolean>(false);
+  const [lastRunIsReal, setLastRunIsReal] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      try {
+        const complete =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("rolescout_last_run_complete")
+            : null;
+        if (!cancelled) setLastRunIsReal(complete === "true");
+      } catch {
+        if (!cancelled) setLastRunIsReal(false);
+      }
+
       const profileJson = await getCandidateProfile();
       if (cancelled || !profileJson) return;
       try {
         const profile = JSON.parse(profileJson) as { name?: string };
         if (typeof profile.name === "string") {
-          const first = profile.name.trim().split(/\s+/)[0];
+          const trimmed = profile.name.trim();
+          const first = trimmed.split(/\s+/)[0];
           if (first) setFirstName(first);
+          setProfileIsDemo(trimmed === "Alex Rivera");
         }
       } catch {
         // ignore
@@ -401,7 +414,7 @@ export default function DashboardClient() {
       if (savedOpenRoles) setOpenRolesRaw(savedOpenRoles);
 
       if (!savedSummary) {
-        fetchDemo(DEMO_SOURCES.lastRunSummary, setSummaryRaw, setSummaryIsDemo);
+        fetchDemo(DEMO_SOURCES.lastRunSummary, setSummaryRaw, () => {});
       }
       if (!savedTracking) {
         fetchDemo(DEMO_SOURCES.trackingCsv, setTrackingRaw, setTrackingIsDemo);
@@ -422,7 +435,6 @@ export default function DashboardClient() {
       if (cancelled) return;
       if (latestSummary) {
         setSummaryRaw(latestSummary);
-        setSummaryIsDemo(false);
       }
       if (latestTracking) {
         setTrackingRaw(latestTracking);
@@ -469,7 +481,8 @@ export default function DashboardClient() {
   const hasSummary = summary !== null;
   const hasTracking = trackingRaw !== "";
   const hasOpenRoles = openRolesRaw !== "";
-  const showDemoBanner = summaryIsDemo || trackingIsDemo || openRolesIsDemo;
+  const lastRunIsDemo = profileIsDemo || !lastRunIsReal;
+  const applicationsIsDemo = trackingIsDemo;
 
   const totalApplications = aggregatedJobs.length;
   const activeCount = aggregatedJobs.filter((j) => j.state === "Active").length;
@@ -544,25 +557,18 @@ export default function DashboardClient() {
           Scout. Review. Apply on your terms.
         </p>
       </div>
-      {showDemoBanner && (
-        <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <span>
-            Viewing demo data —{" "}
-            <a
-              href="/lab/rolescout/settings"
-              className="font-medium underline decoration-amber-400 underline-offset-2 hover:text-amber-700"
-            >
-              go to Settings
-            </a>
-            {" "}to upload your own files.
-          </span>
-        </div>
-      )}
-
       {/* Row 1 — Scraper Stats */}
-      <h3 className="text-base font-semibold text-slate-900">
-        Last Run
-      </h3>
+      <div className="flex items-baseline gap-3">
+        <h3 className="text-base font-semibold text-slate-900">Last Run</h3>
+        {lastRunIsDemo && (
+          <a
+            href="/lab/rolescout/settings"
+            className="text-xs text-amber-600 hover:text-amber-700"
+          >
+            Demo data
+          </a>
+        )}
+      </div>
       <p className="text-sm text-gray-500 mb-4">
         {summary?.run_date
           ? `Completed ${formatLongDate(summary.run_date)}`
@@ -629,9 +635,17 @@ export default function DashboardClient() {
       </div>
 
       {/* Row 2 — Applications */}
-      <h3 className="text-base font-semibold text-slate-900 mb-4">
-        Applications
-      </h3>
+      <div className="flex items-baseline gap-3 mb-4">
+        <h3 className="text-base font-semibold text-slate-900">Applications</h3>
+        {applicationsIsDemo && (
+          <a
+            href="/lab/rolescout/settings"
+            className="text-xs text-amber-600 hover:text-amber-700"
+          >
+            Demo data
+          </a>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
         <StatCard
           icon={<IconBriefcase />}

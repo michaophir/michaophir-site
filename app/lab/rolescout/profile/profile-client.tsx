@@ -11,8 +11,6 @@ import {
   setResumeFilename,
 } from "../lib/storage";
 
-type UploadTab = "upload" | "linkedin";
-
 const SAMPLE_PROFILE = {
   name: "Alex Rivera",
   email: "alex.rivera@email.com",
@@ -448,7 +446,6 @@ function StepIcon({ status }: { status: StepStatus }) {
 }
 
 export default function ProfileClient() {
-  const [tab, setTab] = useState<UploadTab>("upload");
   const [isDragging, setIsDragging] = useState(false);
 
   const [profileText, setProfileText] = useState<string>("");
@@ -744,28 +741,6 @@ export default function ProfileClient() {
   return (
     <div className="max-w-3xl">
       <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTab("upload")}
-            className={
-              tab === "upload"
-                ? "rounded-full bg-slate-900 text-white px-4 py-1.5 text-sm font-medium"
-                : "rounded-full text-gray-500 px-4 py-1.5 text-sm font-medium hover:text-slate-900"
-            }
-          >
-            Upload Resume
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="hidden rounded-full text-gray-400 px-4 py-1.5 text-sm font-medium cursor-not-allowed"
-          >
-            Paste LinkedIn URL
-          </button>
-        </div>
-
         {hasFile ? (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
             <div className="flex items-center justify-between">
@@ -804,7 +779,7 @@ export default function ProfileClient() {
             <button
               type="button"
               onClick={onBrowseClick}
-              className="rounded-full border border-gray-200 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-gray-50 transition"
+              className="rounded-full bg-slate-900 text-white px-5 py-2 text-sm font-medium hover:bg-slate-700 transition"
             >
               Browse files
             </button>
