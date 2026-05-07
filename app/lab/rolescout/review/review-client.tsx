@@ -946,7 +946,7 @@ export default function ReviewClient() {
               savedIds={savedIds}
               onToggle={toggleSave}
             />
-            <div className="hidden xl:block mt-8">
+            <div className="hidden xl:pointer-fine:block mt-8">
               <ListingsTable
                 jobs={filtered}
                 savedIds={savedIds}
@@ -954,7 +954,7 @@ export default function ReviewClient() {
               />
             </div>
             {allRolesByMatch.length > 0 && (
-              <section className="block xl:hidden mb-10">
+              <section className="block xl:pointer-fine:hidden mb-10">
                 <SectionHeader title="All Roles" />
                 <div className="grid gap-4 sm:grid-cols-2">
                   {mobileVisibleRoles.map((job) => (
