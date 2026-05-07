@@ -78,6 +78,15 @@ function IconScout() {
     </svg>
   );
 }
+function IconHelp() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 9a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 3.5" />
+      <circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 function IconSettings() {
   return (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -129,6 +138,7 @@ const NAV_ITEMS: NavItem[] = [
 const SECONDARY_NAV_ITEMS: NavItem[] = [
   { label: "Profile & Skills", href: "/lab/rolescout/profile", icon: <IconProfile /> },
   { label: "Settings", href: "/lab/rolescout/settings", icon: <IconSettings /> },
+  { label: "Help", href: "/lab/rolescout/help", icon: <IconHelp /> },
 ];
 
 function ExpandedNavList({

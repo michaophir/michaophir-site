@@ -403,6 +403,60 @@ function RunScraperSection() {
     }
   }, []);
 
+  // Block tab close / refresh while a scout run is in progress.
+  useEffect(() => {
+    if (!isRunning) {
+      window.onbeforeunload = null;
+      return;
+    }
+    const message =
+      "Scouting is in progress. If you leave, your results will not be saved.";
+    window.onbeforeunload = () => message;
+    return () => {
+      window.onbeforeunload = null;
+    };
+  }, [isRunning]);
+
+  // Block Next.js soft navigation (sidebar links, anchor clicks).
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement | null)?.closest("a");
+      if (!target || !target.href) return;
+      if (target.href.includes("/scout")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const confirmed = window.confirm(
+        "Scouting is in progress. If you leave, your results will not be saved. Are you sure?"
+      );
+      if (confirmed) {
+        window.location.href = target.href;
+      }
+    };
+
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [isRunning]);
+
+  // Block browser back/forward while a scout run is in progress.
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const handlePopState = () => {
+      const confirmed = window.confirm(
+        "Scouting is in progress. If you leave, your results will not be saved. Are you sure?"
+      );
+      if (!confirmed) {
+        window.history.pushState(null, "", window.location.href);
+      }
+    };
+
+    window.history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isRunning]);
+
   async function runScraper() {
     setIsRunning(true);
     setProgress([]);
