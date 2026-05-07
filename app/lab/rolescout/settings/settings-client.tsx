@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Papa from "papaparse";
+import { trackEvent } from "@/app/lib/analytics";
 import type { ApiProvider } from "../lib/storage";
 import {
   clearAllRolescout,
@@ -358,6 +359,7 @@ export default function SettingsClient() {
   async function handleLoadDemo() {
     setDemoLoading(true);
     setDemoStatus(null);
+    void trackEvent("demo_data_loaded");
     try {
       const [candidate, openRoles, tracking, lastRun, companies, filters] =
         await Promise.all([

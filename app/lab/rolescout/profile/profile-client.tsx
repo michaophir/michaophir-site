@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "@/app/lib/analytics";
 import {
   getAnthropicKey,
   getCandidateProfile,
@@ -592,6 +593,9 @@ export default function ProfileClient() {
       const message = err instanceof Error ? err.message : "Unknown error";
       setParseStepError(message);
       setParseStatus("failed");
+      void trackEvent("resume_parse_failed", {
+        error_type: message.slice(0, 100),
+      });
       return;
     }
 
@@ -604,10 +608,34 @@ export default function ProfileClient() {
     try {
       await runConfigGeneration(parsed, apiKey);
       setConfigStatus("done");
+      await emitResumeUploaded();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setConfigStepError(message);
       setConfigStatus("failed");
+      void trackEvent("config_generation_failed", {
+        error_type: message.slice(0, 100),
+      });
+    }
+  }
+
+  async function emitResumeUploaded() {
+    try {
+      const json = await getCandidateProfile();
+      const parsed = json ? (JSON.parse(json) as Record<string, unknown>) : {};
+      const skills = Array.isArray(parsed.skills) ? parsed.skills.length : 0;
+      const companies = Array.isArray(parsed.target_companies)
+        ? (parsed.target_companies as unknown[]).length
+        : 0;
+      void trackEvent("resume_uploaded", {
+        skills_extracted: skills,
+        target_companies: companies,
+      });
+    } catch {
+      void trackEvent("resume_uploaded", {
+        skills_extracted: 0,
+        target_companies: 0,
+      });
     }
   }
 
@@ -631,10 +659,14 @@ export default function ProfileClient() {
     try {
       await runConfigGeneration(baseProfile, apiKey);
       setConfigStatus("done");
+      await emitResumeUploaded();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setConfigStepError(message);
       setConfigStatus("failed");
+      void trackEvent("config_generation_failed", {
+        error_type: message.slice(0, 100),
+      });
     }
   }
 

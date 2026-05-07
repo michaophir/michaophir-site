@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
+import { trackEvent } from "@/app/lib/analytics";
 import { getLastRunSummary, getOpenRolesCsv } from "../lib/storage";
 
 const DEMO_CSV_URL =
@@ -269,6 +270,12 @@ function JobCard({
             href={job.job_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              void trackEvent("external_link_clicked", {
+                company: job.company,
+                job_url: job.job_url.slice(0, 256),
+              })
+            }
             className="text-xs font-medium text-blue-600 hover:text-blue-700"
           >
             View&nbsp;↗
@@ -559,6 +566,12 @@ function ListingsTable({
                       href={job.job_url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() =>
+                        void trackEvent("external_link_clicked", {
+                          company: job.company,
+                          job_url: job.job_url.slice(0, 256),
+                        })
+                      }
                       className="text-sm font-medium text-blue-600 hover:text-blue-700"
                     >
                       View&nbsp;↗
@@ -758,8 +771,16 @@ export default function ReviewClient() {
   const toggleSave = (id: string) => {
     setSavedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      const wasSaved = next.has(id);
+      if (wasSaved) next.delete(id);
       else next.add(id);
+      const job = jobs.find((j) => j.job_id === id);
+      if (job) {
+        void trackEvent(wasSaved ? "role_passed" : "role_saved", {
+          company: job.company,
+          match_score: job.match_score ?? 0,
+        });
+      }
       return next;
     });
   };

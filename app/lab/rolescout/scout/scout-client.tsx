@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Papa from "papaparse";
+import { trackEvent } from "@/app/lib/analytics";
 import {
   getCandidateProfile,
   getLastRunSummary,
@@ -484,6 +485,20 @@ function RunScraperSection() {
       return;
     }
 
+    {
+      const p = profile as Record<string, unknown>;
+      const filterCount = Array.isArray(p.role_filters)
+        ? (p.role_filters as unknown[]).length
+        : 0;
+      const companyCount = Array.isArray(p.target_companies)
+        ? (p.target_companies as unknown[]).length
+        : 0;
+      void trackEvent("scout_initiated", {
+        filter_count: filterCount,
+        company_count: companyCount,
+      });
+    }
+
     try {
       const response = await fetch("/api/run-scraper", {
         method: "POST",
@@ -493,6 +508,9 @@ function RunScraperSection() {
 
       if (!response.ok) {
         setRunError("Scraper service unavailable. Try again later.");
+        void trackEvent("scout_failed", {
+          error_type: `HTTP ${response.status}`.slice(0, 100),
+        });
         setIsRunning(false);
         return;
       }
@@ -560,10 +578,36 @@ function RunScraperSection() {
           window.dispatchEvent(
             new CustomEvent("rolescout-data-updated")
           );
+          {
+            const summary = (event.last_run_summary ?? {}) as Record<
+              string,
+              unknown
+            >;
+            const perCompany = Array.isArray(summary.per_company)
+              ? (summary.per_company as Array<Record<string, unknown>>)
+              : [];
+            const rolesReturned = perCompany.reduce(
+              (acc, c) =>
+                acc +
+                (typeof c.roles_total === "number" ? c.roles_total : 0),
+              0
+            );
+            const rolesPostFilter =
+              typeof summary.roles_fetched_post_filter === "number"
+                ? summary.roles_fetched_post_filter
+                : 0;
+            void trackEvent("scout_completed", {
+              roles_returned: rolesReturned,
+              roles_post_filter: rolesPostFilter,
+            });
+          }
         }
 
         if (event.type === "error" && typeof event.message === "string") {
           setRunError(event.message);
+          void trackEvent("scout_failed", {
+            error_type: event.message.slice(0, 100),
+          });
         }
       };
 
@@ -587,7 +631,11 @@ function RunScraperSection() {
         await handleSseLine(buffer);
       }
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : "Unknown error");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setRunError(message);
+      void trackEvent("scout_failed", {
+        error_type: message.slice(0, 100),
+      });
     } finally {
       setIsRunning(false);
     }
