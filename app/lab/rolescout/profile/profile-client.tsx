@@ -262,7 +262,48 @@ Return ONLY a valid JSON object with this exact schema — no preamble, no markd
 Rules:
 - target_companies: 30-50 companies that match the candidate's background, seniority, and industry. Tier 1 = dream companies, Tier 2 = strong fit, Tier 3 = good backup. Include real company websites. Do NOT include companies they have already worked at.
 - role_filters field types:
-  - title: job titles to match (e.g. 'Senior Product Manager', 'Director of Product', 'Head of Product', 'Staff Product Manager', 'Principal Product Manager', 'VP of Product', 'Group Product Manager') Generate at least 10-15 title variants covering the candidate's seniority level and one level above.
+  - title: Title filters MUST be generic, standalone role names that match how companies actually post jobs. They contain ONLY the role + seniority. They NEVER include domain qualifiers like AI, ML, Platform, Growth, Infrastructure, etc.
+
+GOOD examples by role type:
+
+Product roles: 'Product Manager', 'Senior Product Manager', 'Staff Product Manager', 'Principal Product Manager', 'Group Product Manager', 'Director of Product', 'Head of Product', 'VP of Product', 'Founding Product Manager', 'Technical Product Manager'
+
+Engineering roles: 'Software Engineer', 'Senior Software Engineer', 'Staff Software Engineer', 'Principal Engineer', 'Engineering Manager', 'Director of Engineering', 'VP of Engineering', 'Founding Engineer', 'Senior Backend Engineer', 'Senior Frontend Engineer', 'Senior Full Stack Engineer'
+
+Design roles: 'Product Designer', 'Senior Product Designer', 'Staff Designer', 'Principal Designer', 'Design Lead', 'Director of Design', 'Head of Design', 'VP of Design', 'UX Designer'
+
+Data / ML roles: 'Data Scientist', 'Senior Data Scientist', 'Staff Data Scientist', 'Machine Learning Engineer', 'Senior ML Engineer', 'Research Scientist', 'Applied Scientist', 'Data Engineer'
+
+Operations / GTM roles: 'Product Marketing Manager', 'Sales Engineer', 'Solutions Architect', 'Customer Success Manager', 'Account Executive', 'Chief of Staff'
+
+BAD examples (NEVER produce these):
+- 'Senior Product Manager, AI Platform'
+- 'Staff Software Engineer, ML Infrastructure'
+- 'Principal Designer, Generative AI'
+- 'Senior Data Scientist, Recommendations'
+- 'Head of Product, AI'
+- 'VP Engineering, Platform'
+
+Rule: If you find yourself writing a comma in a title filter, stop. The text after the comma belongs in domain filters.
+
+ALWAYS INCLUDE THE BASE ROLE NAME (without seniority prefix) for the candidate's primary role family:
+- Product: 'Product Manager'
+- Engineering: 'Software Engineer', 'Backend Engineer', 'Frontend Engineer', or 'Full Stack Engineer' (whichever matches the candidate)
+- Design: 'Product Designer' or 'Designer'
+- Data / ML: 'Data Scientist', 'Data Engineer', or 'Machine Learning Engineer' (whichever matches)
+- Sales: 'Account Executive', 'Sales Engineer'
+- Customer Success: 'Customer Success Manager'
+- Marketing: 'Product Marketing Manager'
+- Operations: 'Operations Manager', 'Chief of Staff'
+- Research: 'Research Scientist', 'Applied Scientist'
+
+Many companies, especially startups and AI-native companies, post roles without seniority prefixes (e.g. 'Product Manager at OpenAI', 'Software Engineer at Anthropic'). The seniority filter handles level matching separately, so the base role name is required regardless of the candidate's seniority.
+
+If the candidate fits multiple role families, include base names for each.
+
+The candidate's domain expertise (AI, ML, RAG, agentic, growth, infrastructure, fintech, etc.) goes into the domain filters separately. The combination of matching title + matching domain in description is what produces a high-scoring role.
+
+Generate 10-15 title filter variations covering the candidate's target seniority range and role family. Use the role family that matches the candidate's experience (Product, Engineering, Design, Data/ML, GTM, etc.).
   - seniority: one row per seniority signal. Each value must be a single word that appears standalone in job titles. Example: Principal, Senior, Staff, Director, VP, Head, Chief, Lead. Never combine multiple values in one row.
   - domain: short single or two-word keywords that appear verbatim in job descriptions (e.g. 'fintech', 'AI', 'machine learning', 'privacy', 'compliance', 'analytics', 'SaaS'). Max 3 words per value. Never use phrases like 'AI and Machine Learning' — split into separate rows: 'AI' and 'machine learning'.
 - skill rows: do NOT include. Skills come from the candidate's skills[] array and are used directly for scoring.
