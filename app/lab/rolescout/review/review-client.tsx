@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import { trackEvent } from "@/app/lib/analytics";
 import { getLastRunSummary, getOpenRolesCsv } from "../lib/storage";
@@ -97,24 +97,39 @@ const DATE_PILLS: { value: DatePill; label: string }[] = [
 function FilterBar({
   activeWorkplace,
   activeDates,
-  searchFilter,
-  setSearchFilter,
+  searchInput,
+  setSearchInput,
+  activeTerms,
+  addTerm,
+  removeTerm,
+  clearTerms,
   toggle,
   clearAll,
 }: {
   activeWorkplace: Set<WorkplacePill>;
   activeDates: Set<DatePill>;
-  searchFilter: string;
-  setSearchFilter: (v: string) => void;
+  searchInput: string;
+  setSearchInput: (v: string) => void;
+  activeTerms: string[];
+  addTerm: (term: string) => void;
+  removeTerm: (index: number) => void;
+  clearTerms: () => void;
   toggle: (pill: WorkplacePill | DatePill) => void;
   clearAll: () => void;
 }) {
   const [searchFocused, setSearchFocused] = useState(false);
 
+  const commitInput = () => {
+    const trimmed = searchInput.trim();
+    if (!trimmed) return;
+    addTerm(trimmed);
+    setSearchInput("");
+  };
+
   const noneActive =
     activeWorkplace.size === 0 &&
     activeDates.size === 0 &&
-    searchFilter.trim() === "";
+    activeTerms.length === 0;
 
   const pill = (
     label: string,
@@ -135,30 +150,80 @@ function FilterBar({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {pill("All", noneActive, clearAll)}
-      {DATE_PILLS.map((p) =>
-        pill(p.label, activeDates.has(p.value), () => toggle(p.value))
-      )}
-      {WORKPLACE_PILLS.map((p) =>
-        pill(p.label, activeWorkplace.has(p.value), () => toggle(p.value))
-      )}
-      <div className="relative ml-3">
-        <input
-          type="text"
-          value={searchFilter}
-          onChange={(e) => setSearchFilter(e.target.value)}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-          placeholder="Filter roles..."
-          className="w-48 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm text-slate-700 placeholder-gray-400 focus:border-slate-400 focus:outline-none"
-        />
-        {searchFocused && (
-          <p className="absolute mt-1 text-xs text-gray-400 bg-white rounded-lg px-3 py-1.5 shadow-sm border border-gray-100 z-10 max-w-xs">
-            Tip: prefix with minus to exclude · separate terms with commas
-          </p>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {pill("All", noneActive, clearAll)}
+        {DATE_PILLS.map((p) =>
+          pill(p.label, activeDates.has(p.value), () => toggle(p.value))
         )}
+        {WORKPLACE_PILLS.map((p) =>
+          pill(p.label, activeWorkplace.has(p.value), () => toggle(p.value))
+        )}
+        <div className="relative ml-3">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                commitInput();
+              }
+            }}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder="Filter roles..."
+            className="w-48 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm text-slate-700 placeholder-gray-400 focus:border-slate-400 focus:outline-none"
+          />
+          {searchFocused && (
+            <p className="absolute mt-1 text-xs text-gray-400 bg-white rounded-lg px-3 py-1.5 shadow-sm border border-gray-100 z-10 max-w-xs">
+              Enter one or more terms — press Enter or comma to add. Prefix with - to exclude. Searches title, company, and location.
+            </p>
+          )}
+        </div>
       </div>
+      {activeTerms.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {activeTerms.map((term, i) => {
+            const isExclude = term.startsWith("-");
+            const label = isExclude ? term.slice(1) : term;
+            return (
+              <span
+                key={`${term}-${i}`}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${
+                  isExclude
+                    ? "bg-red-50 text-red-700"
+                    : "border border-gray-200 bg-white text-slate-700"
+                }`}
+              >
+                {isExclude && <span aria-hidden>−</span>}
+                <span>{label}</span>
+                <button
+                  type="button"
+                  onClick={() => removeTerm(i)}
+                  aria-label={`Remove filter ${label}`}
+                  className={`-mr-0.5 leading-none transition ${
+                    isExclude
+                      ? "text-red-400 hover:text-red-700"
+                      : "text-gray-400 hover:text-slate-700"
+                  }`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          {activeTerms.length >= 2 && (
+            <button
+              type="button"
+              onClick={clearTerms}
+              className="text-xs text-gray-500 underline underline-offset-2 hover:text-slate-700"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -323,6 +388,43 @@ function CardGrid({
         ))}
       </div>
     </section>
+  );
+}
+
+function LocationCell({ location }: { location: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLTableCellElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const hasLocation = location.trim().length > 0;
+
+  return (
+    <td ref={ref} className="relative px-5 py-3 text-gray-500">
+      <button
+        type="button"
+        onClick={() => hasLocation && setOpen((o) => !o)}
+        disabled={!hasLocation}
+        title={location || undefined}
+        className="block w-full cursor-pointer truncate text-left hover:text-slate-700 disabled:cursor-default disabled:hover:text-gray-500"
+      >
+        {location || "—"}
+      </button>
+      {open && hasLocation && (
+        <div className="absolute left-5 z-20 mt-1 max-w-xs rounded-lg border border-gray-100 bg-white px-3 py-1.5 text-xs text-gray-600 shadow-sm">
+          {location}
+        </div>
+      )}
+    </td>
   );
 }
 
@@ -499,6 +601,7 @@ function ListingsTable({
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onClick={handleSort}
+                className="w-72"
               />
               <SortableHeader
                 label="Match"
@@ -517,8 +620,8 @@ function ListingsTable({
                 onClick={handleSort}
                 className="w-32 whitespace-nowrap"
               />
-              <th className="px-5 py-3 w-36">Location</th>
-              <th className="px-5 py-3 w-40">Description</th>
+              <th className="px-5 py-3 w-52">Location</th>
+              <th className="px-5 py-3">Description</th>
             </tr>
           </thead>
           <tbody>
@@ -583,11 +686,7 @@ function ListingsTable({
                 <td className="whitespace-nowrap px-5 py-3 text-gray-500">
                   {formatCompShort(job.compensation_raw)}
                 </td>
-                <td className="px-5 py-3 text-gray-500">
-                  <div className="truncate" title={job.location || undefined}>
-                    {job.location || "—"}
-                  </div>
-                </td>
+                <LocationCell location={job.location} />
                 <DescriptionTooltip text={job.description} />
               </tr>
               );
@@ -631,7 +730,8 @@ export default function ReviewClient() {
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [activeWorkplace, setActiveWorkplace] = useState<Set<WorkplacePill>>(new Set());
   const [activeDates, setActiveDates] = useState<Set<DatePill>>(new Set());
-  const [searchFilter, setSearchFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [activeTerms, setActiveTerms] = useState<string[]>([]);
   const [lastScrapedDate, setLastScrapedDate] = useState<string | null>(null);
   const [mobileVisibleCount, setMobileVisibleCount] = useState(6);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
@@ -765,8 +865,19 @@ export default function ReviewClient() {
   const clearAll = () => {
     setActiveWorkplace(new Set());
     setActiveDates(new Set());
-    setSearchFilter("");
+    setSearchInput("");
+    setActiveTerms([]);
   };
+
+  const addTerm = (term: string) => {
+    setActiveTerms((prev) => [...prev, term]);
+  };
+
+  const removeTerm = (index: number) => {
+    setActiveTerms((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearTerms = () => setActiveTerms([]);
 
   const toggleSave = (id: string) => {
     setSavedIds((prev) => {
@@ -801,35 +912,29 @@ export default function ReviewClient() {
       return true;
     });
 
-    if (searchFilter.trim()) {
-      const terms = searchFilter
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      for (const term of terms) {
-        if (term.startsWith("-")) {
-          const keyword = term.slice(1).toLowerCase();
-          if (!keyword) continue;
-          result = result.filter(
-            (role) =>
-              !role.job_title.toLowerCase().includes(keyword) &&
-              !role.location.toLowerCase().includes(keyword)
-          );
-        } else {
-          const keyword = term.toLowerCase();
-          result = result.filter(
-            (role) =>
-              role.job_title.toLowerCase().includes(keyword) ||
-              role.location.toLowerCase().includes(keyword) ||
-              role.company.toLowerCase().includes(keyword)
-          );
-        }
+    for (const term of activeTerms) {
+      if (term.startsWith("-")) {
+        const keyword = term.slice(1).toLowerCase();
+        if (!keyword) continue;
+        result = result.filter(
+          (role) =>
+            !role.job_title.toLowerCase().includes(keyword) &&
+            !role.company.toLowerCase().includes(keyword) &&
+            !role.location.toLowerCase().includes(keyword)
+        );
+      } else {
+        const keyword = term.toLowerCase();
+        result = result.filter(
+          (role) =>
+            role.job_title.toLowerCase().includes(keyword) ||
+            role.location.toLowerCase().includes(keyword) ||
+            role.company.toLowerCase().includes(keyword)
+        );
       }
     }
 
     return result;
-  }, [jobs, activeWorkplace, activeDates, searchFilter]);
+  }, [jobs, activeWorkplace, activeDates, activeTerms]);
 
   const allRolesByMatch = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -922,8 +1027,12 @@ export default function ReviewClient() {
           <FilterBar
             activeWorkplace={activeWorkplace}
             activeDates={activeDates}
-            searchFilter={searchFilter}
-            setSearchFilter={setSearchFilter}
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            activeTerms={activeTerms}
+            addTerm={addTerm}
+            removeTerm={removeTerm}
+            clearTerms={clearTerms}
             toggle={togglePill}
             clearAll={clearAll}
           />
