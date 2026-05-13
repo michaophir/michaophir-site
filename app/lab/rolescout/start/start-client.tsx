@@ -173,10 +173,8 @@ function PillGroup({
 
 function ProfileSummaryStep({
   profile,
-  flowComplete,
 }: {
   profile: CandidateProfile | null;
-  flowComplete: boolean;
 }) {
   if (!profile) {
     return (
@@ -255,16 +253,6 @@ function ProfileSummaryStep({
         />
       </div>
 
-      {flowComplete && (
-        <div className="mt-5 flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
-          <Link
-            href="/lab/rolescout/profile"
-            className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-gray-50 transition"
-          >
-            Edit details
-          </Link>
-        </div>
-      )}
     </>
   );
 }
@@ -318,7 +306,8 @@ function RoleMiniCard({
   onToggleSave: () => void;
 }) {
   return (
-    <div
+    <Link
+      href={`/lab/rolescout/review#job-${role.job_id}`}
       className={`flex flex-col justify-between rounded-xl border p-4 shadow-sm transition hover:shadow-md ${
         saved ? "border-blue-200 bg-blue-50/30" : "border-gray-100 bg-white"
       }`}
@@ -335,7 +324,11 @@ function RoleMiniCard({
           </div>
           <button
             type="button"
-            onClick={onToggleSave}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleSave();
+            }}
             aria-label={saved ? "Unsave" : "Save role"}
             className={`transition ${
               saved ? "text-blue-600" : "text-gray-300 hover:text-blue-600"
@@ -355,7 +348,7 @@ function RoleMiniCard({
         <span className="truncate">{role.location || "—"}</span>
         <span>{formatCompShort(role.compensation_raw)}</span>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -455,17 +448,12 @@ function MatchesStep({
       )}
 
       <div className="mt-5 flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-900">Want more matches?</p>
-          <p className="text-xs text-slate-600">
-            Run the full scout across all {totalTargetCompanies} companies (~60 sec).
-          </p>
-        </div>
+        <p className="text-sm font-medium text-slate-900">Want more matches?</p>
         <Link
           href="/lab/rolescout/scout"
-          className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700 transition"
+          className="text-xs text-blue-600 hover:text-blue-700"
         >
-          Run full scout →
+          Run the full scout across all target companies →
         </Link>
       </div>
     </>
@@ -767,7 +755,7 @@ function QuickScanStep({
           <InfoBubble
             icon={<RadarIcon className="h-4 w-4" />}
             title="Scout is running"
-            body="Scouting target companies and establishing match scores from your skills."
+            body="Scouting target companies for open roles matching your profile."
             onDismiss={() => setBubble1Open(false)}
           />
         )}
@@ -775,7 +763,7 @@ function QuickScanStep({
           <InfoBubble
             icon={<BookmarkIconOutline className="h-4 w-4" />}
             title="Up next"
-            body="When done, review the ranked roles, save the ones you want, and track them in Applications."
+            body="When done, review open roles. Partial list here, complete list in Discover Roles."
             onDismiss={() => setBubble2Open(false)}
           />
         )}
@@ -986,8 +974,8 @@ function ResumeUploadStep({
       {!hasFile ? (
         <>
           <p className="mb-4 text-sm text-gray-600">
-            Upload your resume. We&apos;ll extract your skills, build your
-            candidate profile, and generate your target companies.
+            We&apos;ll extract your skills, build your candidate profile, and
+            generate your target companies.
           </p>
           <div
             className={`rounded-xl border-2 border-dashed p-8 text-center transition ${
@@ -1423,7 +1411,7 @@ export default function StartClient() {
         <button
           type="button"
           onClick={handleSkip}
-          className="text-xs text-gray-400 underline underline-offset-2 hover:text-slate-700"
+          className="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:border-gray-300 hover:bg-gray-50 transition"
         >
           Skip to dashboard
         </button>
@@ -1491,10 +1479,7 @@ export default function StartClient() {
             : undefined
         }
       >
-        <ProfileSummaryStep
-          profile={profile}
-          flowComplete={flowComplete}
-        />
+        <ProfileSummaryStep profile={profile} />
       </SectionShell>
 
       <SectionShell

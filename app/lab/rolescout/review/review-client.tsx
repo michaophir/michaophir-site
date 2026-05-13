@@ -287,7 +287,8 @@ function JobCard({
 
   return (
     <div
-      className={`flex flex-col justify-between rounded-xl border p-5 shadow-sm transition hover:shadow-md ${
+      id={`job-${job.job_id}`}
+      className={`scroll-mt-24 flex flex-col justify-between rounded-xl border p-5 shadow-sm transition hover:shadow-md target:ring-2 target:ring-blue-400 target:ring-offset-2 ${
         isSaved ? "border-blue-200 bg-blue-50/30" : "border-gray-100 bg-white"
       }`}
     >
