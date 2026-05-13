@@ -3,11 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import {
-  getCandidateProfile,
-  getLastRunSummary,
-  getOpenRolesCsv,
-} from "@/app/lab/rolescout/lib/storage";
 
 type NavItem = {
   label: string;
@@ -209,91 +204,46 @@ function CollapsedNavList({
 
 function GettingStartedCard() {
   const [mounted, setMounted] = useState(false);
-  const [hasProfile, setHasProfile] = useState(false);
-  const [hasLastRun, setHasLastRun] = useState(false);
-  const [hasOpenRoles, setHasOpenRoles] = useState(false);
+  const [onboarded, setOnboarded] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    const lsGet = (k: string) => {
-      try {
-        return window.localStorage.getItem(k) ?? "";
-      } catch {
-        return "";
-      }
-    };
-    (async () => {
-      const [profile, lastRun, openRoles] = await Promise.all([
-        getCandidateProfile(),
-        getLastRunSummary(),
-        getOpenRolesCsv(),
-      ]);
-      if (cancelled) return;
-
-      let profileName = "";
-      try {
-        const parsed = JSON.parse(profile || "{}");
-        profileName = String(parsed?.name ?? "").trim();
-      } catch {
-        profileName = "";
-      }
-      const isDemoProfile = profileName === "Alex Rivera";
-      const lastRunComplete = lsGet("rolescout_last_run_complete") === "true";
-
-      setHasProfile(Boolean(profile) && !isDemoProfile);
-      setHasLastRun(Boolean(lastRun) && lastRunComplete);
-      setHasOpenRoles(Boolean(openRoles) && lastRunComplete);
-      setMounted(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    try {
+      setOnboarded(
+        window.localStorage.getItem("rolescout_user_onboarded") === "true"
+      );
+    } catch {
+      setOnboarded(false);
+    }
+    setMounted(true);
   }, []);
 
   if (!mounted) {
     return <div className="rounded-lg bg-gray-50 p-3" />;
   }
 
-  const allDone = hasProfile && hasLastRun && hasOpenRoles;
-
-  if (allDone) {
+  if (onboarded) {
     return (
       <div className="rounded-lg bg-gray-50 p-3">
         <p className="text-xs font-semibold text-green-700">✓ You&apos;re all set</p>
-        <p className="text-xs text-gray-500">Scout. Review. Apply on your terms.</p>
+        <Link
+          href="/lab/rolescout/start?fresh=1"
+          className="text-xs text-blue-600 hover:underline"
+        >
+          Re-run quick start →
+        </Link>
       </div>
     );
   }
 
-  const items: { label: string; href: string; done: boolean }[] = [
-    { label: "Upload your resume", href: "/lab/rolescout/profile", done: hasProfile },
-    { label: "Scout for open roles", href: "/lab/rolescout/scout", done: hasLastRun },
-    { label: "Review your matches", href: "/lab/rolescout/review", done: hasOpenRoles },
-  ];
-
   return (
     <div className="rounded-lg bg-gray-50 p-3">
       <p className="text-xs font-semibold text-slate-900">Get started</p>
-      {items.map((item) => (
-        <div key={item.href} className="mt-1.5 flex items-center gap-1.5 text-xs">
-          {item.done ? (
-            <>
-              <span aria-hidden="true" className="text-green-600">✓</span>
-              <span className="text-gray-400 line-through">{item.label}</span>
-            </>
-          ) : (
-            <>
-              <span
-                aria-hidden="true"
-                className="inline-block h-3 w-3 rounded-full border border-gray-300"
-              />
-              <Link href={item.href} className="text-blue-600 hover:underline">
-                {item.label}
-              </Link>
-            </>
-          )}
-        </div>
-      ))}
+      <Link
+        href="/lab/rolescout/start"
+        className="mt-1 inline-block text-xs text-blue-600 hover:underline"
+      >
+        Quick start guide →
+      </Link>
     </div>
   );
 }
@@ -367,7 +317,11 @@ function CollapsedContent({
   );
 }
 
-export default function RoleScoutSidebar() {
+export default function RoleScoutSidebar({
+  locked = false,
+}: {
+  locked?: boolean;
+}) {
   const pathname = usePathname() ?? "";
   const collapsed = useSyncExternalStore(
     subscribeCollapsed,
@@ -379,10 +333,12 @@ export default function RoleScoutSidebar() {
 
   useEffect(() => {
     setHydrated(true);
-    const handler = () => setMobileOpen(true);
+    const handler = () => {
+      if (!locked) setMobileOpen(true);
+    };
     window.addEventListener(OPEN_EVENT, handler);
     return () => window.removeEventListener(OPEN_EVENT, handler);
-  }, []);
+  }, [locked]);
 
   function toggleCollapse() {
     const next = !collapsed;
@@ -394,13 +350,18 @@ export default function RoleScoutSidebar() {
     window.dispatchEvent(new CustomEvent(COLLAPSE_CHANGED_EVENT));
   }
 
+  const lockedClass = locked
+    ? "opacity-60 pointer-events-none select-none"
+    : "";
+
   return (
     <>
       {/* Desktop sidebar */}
       <aside
+        aria-disabled={locked || undefined}
         className={`hidden lg:flex sticky top-[65px] h-[calc(100vh-65px)] shrink-0 flex-col border-r border-gray-200 bg-white ${
           hydrated ? "transition-all duration-200" : ""
-        } ${collapsed ? "w-[64px]" : "w-[260px]"}`}
+        } ${collapsed ? "w-[64px]" : "w-[260px]"} ${lockedClass}`}
       >
         {collapsed ? (
           <CollapsedContent pathname={pathname} onExpand={toggleCollapse} />
@@ -410,7 +371,7 @@ export default function RoleScoutSidebar() {
       </aside>
 
       {/* Mobile drawer */}
-      {mobileOpen && (
+      {mobileOpen && !locked && (
         <>
           <div
             onClick={() => setMobileOpen(false)}
@@ -436,11 +397,16 @@ export default function RoleScoutSidebar() {
   );
 }
 
-export function MobileSidebarTrigger() {
+export function MobileSidebarTrigger({
+  locked = false,
+}: {
+  locked?: boolean;
+}) {
   function onClick() {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent(OPEN_EVENT));
   }
+  if (locked) return null;
   return (
     <button
       type="button"
