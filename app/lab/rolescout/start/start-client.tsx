@@ -580,6 +580,16 @@ function QuickScanStep({
     if (started || !profile) return;
     setStarted(true);
     void trackEvent("onboarding_scout_started", {});
+    const filterCount = Array.isArray(profile.role_filters)
+      ? (profile.role_filters as unknown[]).length
+      : 0;
+    const companyCount = Array.isArray(profile.target_companies)
+      ? Math.min((profile.target_companies as unknown[]).length, 10)
+      : 0;
+    void trackEvent("scout_initiated", {
+      filter_count: filterCount,
+      company_count: companyCount,
+    });
     void runScraper();
   };
 
@@ -668,6 +678,10 @@ function QuickScanStep({
           ]);
           window.dispatchEvent(new CustomEvent("rolescout-data-updated"));
           void trackEvent("onboarding_scout_completed", {
+            roles_returned: rolesReturned,
+            roles_post_filter: rolesPostFilter,
+          });
+          void trackEvent("scout_completed", {
             roles_returned: rolesReturned,
             roles_post_filter: rolesPostFilter,
           });
@@ -873,6 +887,22 @@ function ResumeUploadStep({
       await setCandidateProfile(JSON.stringify(merged));
       setConfigStatus("done");
       void trackEvent("onboarding_config_generated", {});
+      const skillsCount = Array.isArray(
+        (merged as Record<string, unknown>).skills
+      )
+        ? ((merged as Record<string, unknown>).skills as unknown[]).length
+        : 0;
+      const companiesCount = Array.isArray(
+        (merged as Record<string, unknown>).target_companies
+      )
+        ? (
+            (merged as Record<string, unknown>).target_companies as unknown[]
+          ).length
+        : 0;
+      void trackEvent("resume_uploaded", {
+        skills_extracted: skillsCount,
+        target_companies: companiesCount,
+      });
       window.setTimeout(onComplete, 600);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -899,6 +929,22 @@ function ResumeUploadStep({
       await setCandidateProfile(JSON.stringify(merged));
       setConfigStatus("done");
       void trackEvent("onboarding_config_generated", {});
+      const skillsCount = Array.isArray(
+        (merged as Record<string, unknown>).skills
+      )
+        ? ((merged as Record<string, unknown>).skills as unknown[]).length
+        : 0;
+      const companiesCount = Array.isArray(
+        (merged as Record<string, unknown>).target_companies
+      )
+        ? (
+            (merged as Record<string, unknown>).target_companies as unknown[]
+          ).length
+        : 0;
+      void trackEvent("resume_uploaded", {
+        skills_extracted: skillsCount,
+        target_companies: companiesCount,
+      });
       window.setTimeout(onComplete, 600);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
