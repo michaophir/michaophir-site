@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
-import { getTrackingCsv, TRACKING_UPDATED_EVENT } from "./lib/storage";
+import { getTrackingCsv, TRACKING_UPDATED_EVENT } from "../lib/storage";
 
 const DEMO_CSV_URL =
   "https://raw.githubusercontent.com/michaophir/rolescout-scraper/main/tracking_sheet.csv";
@@ -666,22 +666,29 @@ function daysBetween(a: Date, b: Date): number {
 }
 
 type NextActionFilter = "all" | "overdue" | "today" | "week";
+type NextActionKey = Exclude<NextActionFilter, "all">;
+type StageName = (typeof STAGES)[number];
 
-export default function RoleScoutClient() {
+const NEXT_ACTION_PILLS: { value: NextActionKey; label: string }[] = [
+  { value: "overdue", label: "Overdue" },
+  { value: "today", label: "Due Today" },
+  { value: "week", label: "Due This Week" },
+];
+
+export default function ApplicationsClient() {
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Filters
-  const [stageFilter, setStageFilter] = useState("all");
-  const [stateFilter, setStateFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("all");
-  const [nextActionFilter, setNextActionFilter] =
-    useState<NextActionFilter>("all");
+  const [activeStages, setActiveStages] = useState<Set<StageName>>(new Set());
+  const [activeNextActions, setActiveNextActions] = useState<
+    Set<NextActionKey>
+  >(new Set());
+  const [searchInput, setSearchInput] = useState("");
 
   // Collapsible sections
   const [sankeyOpen, setSankeyOpen] = useState(true);
-  const [tableOpen, setTableOpen] = useState(true);
 
   // Sankey tooltip
   const [tooltip, setTooltip] = useState<{
@@ -742,47 +749,80 @@ export default function RoleScoutClient() {
   const { jobs, transitions } = useMemo(() => aggregateJobs(rows), [rows]);
   const stats = useMemo(() => computeStats(jobs), [jobs]);
 
-  const sources = useMemo(
-    () => Array.from(new Set(jobs.map((j) => j.source).filter(Boolean))).sort(),
-    [jobs]
-  );
-  const states = useMemo(
-    () => Array.from(new Set(jobs.map((j) => j.state).filter(Boolean))).sort(),
-    [jobs]
-  );
-  const stages = useMemo(
-    () =>
-      Array.from(new Set(jobs.map((j) => j.currentStage).filter(Boolean))).sort(
-        (a, b) => {
-          const ia = STAGES.indexOf(a as (typeof STAGES)[number]);
-          const ib = STAGES.indexOf(b as (typeof STAGES)[number]);
-          if (ia !== -1 && ib !== -1) return ia - ib;
-          if (ia !== -1) return -1;
-          if (ib !== -1) return 1;
-          return a.localeCompare(b);
-        }
-      ),
-    [jobs]
-  );
+  const stageCounts = useMemo(() => {
+    const m = new Map<StageName, number>();
+    for (const s of STAGES) m.set(s, 0);
+    for (const j of jobs) {
+      if (STAGE_SET.has(j.currentStage)) {
+        const key = j.currentStage as StageName;
+        m.set(key, (m.get(key) ?? 0) + 1);
+      }
+    }
+    return m;
+  }, [jobs]);
+
+  const nextActionCounts = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    let overdue = 0;
+    let today = 0;
+    let week = 0;
+    for (const j of jobs) {
+      const d = parseDate(j.nextActionDate);
+      if (!d) continue;
+      const diff = daysBetween(d, now);
+      if (diff < 0) overdue++;
+      if (diff === 0) today++;
+      if (diff >= 0 && diff <= 7) week++;
+    }
+    return { overdue, today, week };
+  }, [jobs]);
 
   const filteredJobs = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
+    const q = searchInput.trim().toLowerCase();
     return jobs.filter((j) => {
-      if (stageFilter !== "all" && j.currentStage !== stageFilter) return false;
-      if (stateFilter !== "all" && j.state !== stateFilter) return false;
-      if (sourceFilter !== "all" && j.source !== sourceFilter) return false;
-      if (nextActionFilter !== "all") {
+      if (activeStages.size > 0) {
+        if (!activeStages.has(j.currentStage as StageName)) return false;
+      }
+      if (activeNextActions.size > 0) {
         const d = parseDate(j.nextActionDate);
         if (!d) return false;
         const diff = daysBetween(d, now);
-        if (nextActionFilter === "overdue" && diff >= 0) return false;
-        if (nextActionFilter === "today" && diff !== 0) return false;
-        if (nextActionFilter === "week" && (diff < 0 || diff > 7)) return false;
+        const hit =
+          (activeNextActions.has("overdue") && diff < 0) ||
+          (activeNextActions.has("today") && diff === 0) ||
+          (activeNextActions.has("week") && diff >= 0 && diff <= 7);
+        if (!hit) return false;
+      }
+      if (q) {
+        if (
+          !j.company.toLowerCase().includes(q) &&
+          !j.role.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
       }
       return true;
     });
-  }, [jobs, stageFilter, stateFilter, sourceFilter, nextActionFilter]);
+  }, [jobs, activeStages, activeNextActions, searchInput]);
+
+  const toggleStage = (s: StageName) =>
+    setActiveStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+
+  const toggleNextAction = (a: NextActionKey) =>
+    setActiveNextActions((prev) => {
+      const next = new Set(prev);
+      if (next.has(a)) next.delete(a);
+      else next.add(a);
+      return next;
+    });
 
   const sankeyWidth = 1280;
   const sankeyHeight = 520;
@@ -1012,61 +1052,68 @@ export default function RoleScoutClient() {
             )}
           </div>
 
-          {/* Table */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <SectionHeader
-              label="Applications"
-              open={tableOpen}
-              onToggle={() => setTableOpen((v) => !v)}
-            />
-            {tableOpen && (
-            <>
-            <div className="mb-4 grid grid-cols-2 gap-3 text-xs">
-              <FilterSelect
-                label="Stage"
-                value={stageFilter}
-                onChange={setStageFilter}
-                options={stages}
-              />
-              <FilterSelect
-                label="State"
-                value={stateFilter}
-                onChange={setStateFilter}
-                options={states}
-              />
-              <FilterSelect
-                label="Source"
-                value={sourceFilter}
-                onChange={setSourceFilter}
-                options={sources}
-              />
-              <div>
-                <label className="mb-1 block text-gray-500">Next Action</label>
-                <select
-                  value={nextActionFilter}
-                  onChange={(e) =>
-                    setNextActionFilter(e.target.value as NextActionFilter)
-                  }
-                  className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-slate-400 focus:outline-none"
-                >
-                  <option value="all">All</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="today">Due Today</option>
-                  <option value="week">Due This Week</option>
-                </select>
-              </div>
-            </div>
+          {/* Divider + section label so it's clear the filters apply to the table below */}
+          <div className="mt-6 mb-4 border-t border-gray-200" />
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">
+            Applications
+          </h2>
 
+          {/* Filters — on page background to match Discover Roles */}
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <FilterPill
+              label="All"
+              active={activeStages.size === 0}
+              onClick={() => setActiveStages(new Set())}
+            />
+            {STAGES.map((s) => (
+              <FilterPill
+                key={s}
+                label={`${s} ${stageCounts.get(s) ?? 0}`}
+                active={activeStages.has(s)}
+                onClick={() => toggleStage(s)}
+              />
+            ))}
+          </div>
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <FilterPill
+              label="All"
+              active={activeNextActions.size === 0}
+              onClick={() => setActiveNextActions(new Set())}
+            />
+            {NEXT_ACTION_PILLS.map((p) => (
+              <FilterPill
+                key={p.value}
+                label={`${p.label} ${nextActionCounts[p.value]}`}
+                active={activeNextActions.has(p.value)}
+                onClick={() => toggleNextAction(p.value)}
+              />
+            ))}
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Filter applications..."
+              className="ml-3 w-48 rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm text-slate-700 placeholder-gray-400 focus:border-slate-400 focus:outline-none"
+            />
+          </div>
+
+          <p className="mb-3 text-sm text-gray-400">
+            Showing {filteredJobs.length} application{filteredJobs.length === 1 ? "" : "s"} matching your criteria
+          </p>
+
+          {/* Table */}
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="max-h-[560px] overflow-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-sm">
                 <thead className="sticky top-0 bg-white">
-                  <tr className="border-b border-gray-200 text-gray-500">
-                    <th className="pb-2 pr-2 font-medium">Company</th>
-                    <th className="pb-2 pr-2 font-medium">Role</th>
-                    <th className="pb-2 pr-2 font-medium">Stage</th>
-                    <th className="pb-2 pr-2 font-medium">State</th>
-                    <th className="pb-2 pr-2 font-medium">Next Action</th>
-                    <th className="whitespace-nowrap pb-2 pr-2 font-medium">Job URL</th>
+                  <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
+                    <th className="px-5 py-3">Company</th>
+                    <th className="px-5 py-3">Role</th>
+                    <th className="px-5 py-3">Stage</th>
+                    <th className="px-5 py-3">State</th>
+                    <th className="px-5 py-3">Next Action</th>
+                    <th className="whitespace-nowrap px-5 py-3">Job URL</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1074,7 +1121,7 @@ export default function RoleScoutClient() {
                     <tr>
                       <td
                         colSpan={6}
-                        className="py-6 text-center text-gray-400"
+                        className="px-5 py-6 text-center text-gray-400"
                       >
                         No matching applications
                       </td>
@@ -1088,17 +1135,17 @@ export default function RoleScoutClient() {
                     return (
                       <tr
                         key={j.jobId}
-                        className={`border-b border-gray-100 ${
+                        className={`border-b border-gray-50 transition hover:bg-gray-50/50 ${
                           j.isExit ? "text-gray-400" : "text-slate-900"
                         }`}
                       >
-                        <td className="py-2 pr-2 font-medium">{j.company}</td>
-                        <td className="py-2 pr-2">{j.role}</td>
-                        <td className="py-2 pr-2">{j.currentStage}</td>
-                        <td className="py-2 pr-2">
+                        <td className="px-5 py-3 font-medium">{j.company}</td>
+                        <td className="px-5 py-3">{j.role}</td>
+                        <td className="px-5 py-3">{j.currentStage}</td>
+                        <td className="px-5 py-3">
                           {j.state ? (
                             <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadgeClasses(
+                              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadgeClasses(
                                 j.state
                               )}`}
                             >
@@ -1108,7 +1155,7 @@ export default function RoleScoutClient() {
                             <span className="text-gray-300">—</span>
                           )}
                         </td>
-                        <td className="py-2 pr-2">
+                        <td className="px-5 py-3">
                           {j.nextAction ? (
                             <div>
                               <div>{j.nextAction}</div>
@@ -1128,13 +1175,13 @@ export default function RoleScoutClient() {
                             <span className="text-gray-300">—</span>
                           )}
                         </td>
-                        <td className="whitespace-nowrap py-2 pr-2">
+                        <td className="whitespace-nowrap px-5 py-3">
                           {j.jobUrl ? (
                             <a
                               href={j.jobUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="font-medium text-blue-600 hover:text-blue-700"
+                              className="text-sm font-medium text-blue-600 hover:text-blue-700"
                             >
                               View&nbsp;↗
                             </a>
@@ -1146,8 +1193,6 @@ export default function RoleScoutClient() {
                 </tbody>
               </table>
             </div>
-            </>
-            )}
           </div>
         </div>
       </div>
@@ -1207,33 +1252,27 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FilterSelect({
+function FilterPill({
   label,
-  value,
-  onChange,
-  options,
+  active,
+  onClick,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div>
-      <label className="mb-1 block text-gray-500">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-slate-400 focus:outline-none"
-      >
-        <option value="all">All</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+        active
+          ? "bg-slate-900 text-white"
+          : "bg-white text-gray-600 hover:bg-gray-100"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import RoleScoutClient from "../rolescout-client";
+import ApplicationsClient from "./applications-client";
 
 export const metadata: Metadata = {
   title: "RoleScout — Applications",
@@ -17,7 +17,7 @@ export default function RoleScoutApplicationsPage() {
           Track your application pipeline and monitor progress.
         </p>
       </div>
-      <RoleScoutClient />
+      <ApplicationsClient />
     </div>
   );
 }
