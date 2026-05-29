@@ -4,27 +4,34 @@ import Navbar from "@/components/navbar";
 export const metadata: Metadata = {
   title: "The Lab — Micha Ophir",
   description:
-    "Experiments in AI-native products, tools, and workflows. Built in public.",
+    "Projects in AI-native products, tools, and workflows. Built in public.",
 };
 
-type Experiment = {
+type Project = {
   title: string;
   description: string;
   status: "Active" | "Planned";
   href: string | null;
 };
 
-const ACTIVE: Experiment[] = [
+const ACTIVE: Project[] = [
+  {
+    title: "beachouse.ai",
+    description:
+      "Your home, in full view — quietly keeping an eye on your second home, whether you're there or not. Visibility into every visit, bill, and detail.",
+    status: "Active",
+    href: "https://beachouse.ai",
+  },
   {
     title: "RoleScout",
     description:
       "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
     status: "Active",
-    href: "/lab/rolescout",
+    href: "https://www.getrolescout.com/",
   },
 ];
 
-const PLANNED: Experiment[] = [
+const PLANNED: Project[] = [
   {
     title: "AI-Run Company",
     description: "A company run by AI agents, built in public.",
@@ -40,7 +47,7 @@ const PLANNED: Experiment[] = [
   },
 ];
 
-function StatusBadge({ status }: { status: Experiment["status"] }) {
+function StatusBadge({ status }: { status: Project["status"] }) {
   const classes =
     status === "Active"
       ? "bg-green-50 text-green-700"
@@ -54,11 +61,11 @@ function StatusBadge({ status }: { status: Experiment["status"] }) {
   );
 }
 
-function ExperimentCard({
-  experiment,
+function ProjectCard({
+  project,
   muted,
 }: {
-  experiment: Experiment;
+  project: Project;
   muted?: boolean;
 }) {
   const card = (
@@ -71,19 +78,19 @@ function ExperimentCard({
     >
       <div className="flex items-start justify-between">
         <h3 className="text-lg font-semibold text-slate-900">
-          {experiment.title}
+          {project.title}
         </h3>
-        <StatusBadge status={experiment.status} />
+        <StatusBadge status={project.status} />
       </div>
       <p className="mt-2 text-sm leading-relaxed text-gray-600">
-        {experiment.description}
+        {project.description}
       </p>
     </div>
   );
 
-  if (experiment.href) {
+  if (project.href) {
     return (
-      <a href={experiment.href} className="block">
+      <a href={project.href} className="block">
         {card}
       </a>
     );
@@ -121,30 +128,30 @@ export default function LabPage() {
             The Lab
           </p>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            Experiments, built in public.
+            Projects, built in public.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-gray-600">
-            Experiments in AI-native products, tools, and workflows. Built in
+            Projects in AI-native products, tools, and workflows. Built in
             public.
           </p>
         </header>
 
         {/* Active */}
         <section className="mb-12">
-          <SectionHeading title="Active Experiments" />
+          <SectionHeading title="Active Projects" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {ACTIVE.map((e) => (
-              <ExperimentCard key={e.title} experiment={e} />
+            {ACTIVE.map((p) => (
+              <ProjectCard key={p.title} project={p} />
             ))}
           </div>
         </section>
 
         {/* Planned */}
         <section>
-          <SectionHeading title="Planned Experiments" />
+          <SectionHeading title="Planned Projects" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {PLANNED.map((e) => (
-              <ExperimentCard key={e.title} experiment={e} muted />
+            {PLANNED.map((p) => (
+              <ProjectCard key={p.title} project={p} muted />
             ))}
           </div>
         </section>

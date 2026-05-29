@@ -8,18 +8,19 @@ type Project = {
 
 const projects: Project[] = [
   {
+    title: "beachouse.ai",
+    description:
+      "Your home, in full view — quietly keeping an eye on your second home, whether you're there or not. Visibility into every visit, bill, and detail.",
+    status: "Active",
+    href: "https://beachouse.ai",
+    github: null,
+  },
+  {
     title: "RoleScout",
     description:
       "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
     status: "Active",
-    href: "/lab/rolescout",
-    github: null,
-  },
-  {
-    title: "michaophir.com",
-    description: "This site — built by an AI agent team, in public.",
-    status: "In Progress",
-    href: null,
+    href: "https://www.getrolescout.com/",
     github: null,
   },
 ];
