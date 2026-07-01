@@ -7,12 +7,15 @@ export const metadata: Metadata = {
     "Projects in AI-native products, tools, and workflows. Built in public.",
 };
 
+type Accent = "aspen" | "lake" | "sky";
+
 type Project = {
   title: string;
   description: string;
   status: "Active" | "Planned";
   href: string | null;
   favicon?: string;
+  accent?: Accent;
 };
 
 const ACTIVE: Project[] = [
@@ -23,6 +26,7 @@ const ACTIVE: Project[] = [
     status: "Active",
     href: "https://beachouse.ai",
     favicon: "https://www.google.com/s2/favicons?domain=beachouse.ai&sz=64",
+    accent: "aspen",
   },
   {
     title: "artcubbies.com",
@@ -31,6 +35,7 @@ const ACTIVE: Project[] = [
     status: "Active",
     href: "https://www.artcubbies.com/",
     favicon: "https://www.google.com/s2/favicons?domain=artcubbies.com&sz=64",
+    accent: "lake",
   },
   {
     title: "RoleScout",
@@ -39,6 +44,7 @@ const ACTIVE: Project[] = [
     status: "Active",
     href: "https://www.getrolescout.com/",
     favicon: "https://www.google.com/s2/favicons?domain=getrolescout.com&sz=64",
+    accent: "sky",
   },
 ];
 
@@ -58,14 +64,20 @@ const PLANNED: Project[] = [
   },
 ];
 
+const accentBar: Record<Accent, string> = {
+  aspen: "bg-aspen",
+  lake: "bg-lake",
+  sky: "bg-sky",
+};
+
 function StatusBadge({ status }: { status: Project["status"] }) {
   const classes =
     status === "Active"
-      ? "bg-green-50 text-green-700"
-      : "bg-gray-100 text-gray-500";
+      ? "bg-[#EDF3DD] text-[#4E7D0E]"
+      : "bg-paper-soft text-ink-soft";
   return (
     <span
-      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${classes}`}
+      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${classes}`}
     >
       {status}
     </span>
@@ -81,29 +93,33 @@ function ProjectCard({
 }) {
   const card = (
     <div
-      className={`group h-full rounded-xl border border-gray-200 bg-white p-6 transition ${
-        muted
-          ? "opacity-60"
-          : "hover:border-gray-300 hover:shadow-sm"
+      className={`group relative h-full overflow-hidden rounded-2xl border border-border-soft bg-white p-6 transition ${
+        muted ? "opacity-60" : "hover:border-border hover:shadow-sm"
       }`}
     >
+      {project.accent && (
+        <div
+          aria-hidden
+          className={`absolute inset-x-0 top-0 h-[2px] ${accentBar[project.accent]}`}
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex min-w-0 items-center gap-2.5">
           {project.favicon && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={project.favicon}
               alt=""
-              className="h-5 w-5 rounded shrink-0"
+              className="h-5 w-5 shrink-0 rounded"
             />
           )}
-          <h3 className="text-lg font-semibold text-slate-900">
+          <h3 className="font-display text-lg font-semibold text-ink">
             {project.title}
           </h3>
         </div>
         <StatusBadge status={project.status} />
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-gray-600">
+      <p className="mt-2 text-sm leading-relaxed text-ink-soft">
         {project.description}
       </p>
     </div>
@@ -119,39 +135,37 @@ function ProjectCard({
   return <div>{card}</div>;
 }
 
-function SectionHeading({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
+function SectionHeading({ title }: { title: string }) {
   return (
-    <div className="mb-4">
-      <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500">
-        {title}
-      </h2>
-      {subtitle && (
-        <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
-      )}
-    </div>
+    <h2 className="mb-4 font-mono text-xs font-bold uppercase tracking-eyebrow text-aspen-hover">
+      {title}
+    </h2>
   );
 }
 
 export default function LabPage() {
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-slate-900">
+    <div className="relative min-h-screen text-ink">
+      {/* Aspen radial glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px]"
+        style={{
+          background:
+            "radial-gradient(90% 320px at 8% 0%, rgba(138,91,214,0.10) 0%, rgba(212,91,122,0.06) 38%, rgba(247,244,238,0) 72%)",
+        }}
+      />
       <Navbar />
       <main className="mx-auto max-w-5xl px-6 py-16">
         {/* Header */}
         <header className="mb-14">
-          <p className="mb-3 text-sm font-medium uppercase tracking-widest text-gray-400">
+          <p className="mb-3 font-mono text-xs font-bold uppercase tracking-eyebrow text-aspen-hover">
             The Lab
           </p>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="font-display text-4xl font-bold leading-[0.95] tracking-[-0.035em] text-ink sm:text-5xl">
             Projects, built in public.
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-gray-600">
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">
             Projects in AI-native products, tools, and workflows. Built in
             public.
           </p>

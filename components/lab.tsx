@@ -5,6 +5,7 @@ type Project = {
   href: string | null;
   github: string | null;
   favicon: string | null;
+  accent: "aspen" | "lake" | "sky";
 };
 
 const projects: Project[] = [
@@ -16,6 +17,7 @@ const projects: Project[] = [
     href: "https://beachouse.ai",
     github: null,
     favicon: "https://www.google.com/s2/favicons?domain=beachouse.ai&sz=64",
+    accent: "aspen",
   },
   {
     title: "artcubbies.com",
@@ -25,6 +27,7 @@ const projects: Project[] = [
     href: "https://www.artcubbies.com/",
     github: null,
     favicon: "https://www.google.com/s2/favicons?domain=artcubbies.com&sz=64",
+    accent: "lake",
   },
   {
     title: "RoleScout",
@@ -34,49 +37,62 @@ const projects: Project[] = [
     href: "https://www.getrolescout.com/",
     github: null,
     favicon: "https://www.google.com/s2/favicons?domain=getrolescout.com&sz=64",
+    accent: "sky",
   },
 ];
+
+const accentBar: Record<Project["accent"], string> = {
+  aspen: "bg-aspen",
+  lake: "bg-lake",
+  sky: "bg-sky",
+};
 
 export default function Lab() {
   return (
     <section id="lab" className="flex flex-col justify-center">
-      <p className="mb-3 text-sm font-medium uppercase tracking-widest text-gray-400">
+      <p className="mb-3 font-mono text-xs font-bold uppercase tracking-eyebrow text-aspen-hover">
         The Lab
       </p>
-      <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+      <h2 className="font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
         Active Projects
       </h2>
       <div className="mt-8 flex flex-col gap-4">
         {projects.map((project) => {
           const Card = (
-            <div className="group h-full rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm">
+            <div className="group relative h-full overflow-hidden rounded-2xl border border-border-soft bg-white p-6 transition hover:border-border hover:shadow-sm">
+              <div
+                aria-hidden
+                className={`absolute inset-x-0 top-0 h-[2px] ${accentBar[project.accent]}`}
+              />
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex min-w-0 items-center gap-2.5">
                   {project.favicon && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={project.favicon}
                       alt=""
-                      className="h-5 w-5 rounded shrink-0"
+                      className="h-5 w-5 shrink-0 rounded"
                     />
                   )}
-                  <h3 className="text-lg font-semibold">{project.title}</h3>
+                  <h3 className="font-display text-lg font-semibold text-ink">
+                    {project.title}
+                  </h3>
                 </div>
                 <span
-                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                     project.status === "Active"
-                      ? "bg-green-50 text-green-700"
-                      : "bg-amber-50 text-amber-700"
+                      ? "bg-[#EDF3DD] text-[#4E7D0E]"
+                      : "bg-aspen-28 text-[#9C6B05]"
                   }`}
                 >
                   {project.status}
                 </span>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              <p className="mt-2 text-sm leading-relaxed text-ink-soft">
                 {project.description}
               </p>
               {project.github && (
-                <span className="mt-3 inline-block text-sm font-medium text-gray-500 underline decoration-gray-300 underline-offset-4 transition group-hover:text-gray-900 group-hover:decoration-gray-900">
+                <span className="mt-3 inline-block text-sm font-medium text-ink-soft underline decoration-border underline-offset-4 transition group-hover:text-ink group-hover:decoration-ink">
                   View project &rarr;
                 </span>
               )}
