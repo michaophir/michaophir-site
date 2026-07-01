@@ -12,6 +12,7 @@ type Project = {
   description: string;
   status: "Active" | "Planned";
   href: string | null;
+  favicon?: string;
 };
 
 const ACTIVE: Project[] = [
@@ -21,6 +22,7 @@ const ACTIVE: Project[] = [
       "Your home, in full view — quietly keeping an eye on your second home, whether you're there or not. Visibility into every visit, bill, and detail.",
     status: "Active",
     href: "https://beachouse.ai",
+    favicon: "https://www.google.com/s2/favicons?domain=beachouse.ai&sz=64",
   },
   {
     title: "artcubbies.com",
@@ -28,6 +30,7 @@ const ACTIVE: Project[] = [
       "Keep what they make — a private digital archive for your kid's artwork. Photograph, organize, and preserve creations without the paper pile on the counter.",
     status: "Active",
     href: "https://www.artcubbies.com/",
+    favicon: "https://www.google.com/s2/favicons?domain=artcubbies.com&sz=64",
   },
   {
     title: "RoleScout",
@@ -35,6 +38,7 @@ const ACTIVE: Project[] = [
       "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
     status: "Active",
     href: "https://www.getrolescout.com/",
+    favicon: "https://www.google.com/s2/favicons?domain=getrolescout.com&sz=64",
   },
 ];
 
@@ -83,10 +87,20 @@ function ProjectCard({
           : "hover:border-gray-300 hover:shadow-sm"
       }`}
     >
-      <div className="flex items-start justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">
-          {project.title}
-        </h3>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {project.favicon && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={project.favicon}
+              alt=""
+              className="h-5 w-5 rounded shrink-0"
+            />
+          )}
+          <h3 className="text-lg font-semibold text-slate-900">
+            {project.title}
+          </h3>
+        </div>
         <StatusBadge status={project.status} />
       </div>
       <p className="mt-2 text-sm leading-relaxed text-gray-600">

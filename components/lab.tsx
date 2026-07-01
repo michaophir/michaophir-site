@@ -4,6 +4,7 @@ type Project = {
   status: "Active" | "In Progress";
   href: string | null;
   github: string | null;
+  favicon: string | null;
 };
 
 const projects: Project[] = [
@@ -14,6 +15,7 @@ const projects: Project[] = [
     status: "Active",
     href: "https://beachouse.ai",
     github: null,
+    favicon: "https://www.google.com/s2/favicons?domain=beachouse.ai&sz=64",
   },
   {
     title: "artcubbies.com",
@@ -22,6 +24,7 @@ const projects: Project[] = [
     status: "Active",
     href: "https://www.artcubbies.com/",
     github: null,
+    favicon: "https://www.google.com/s2/favicons?domain=artcubbies.com&sz=64",
   },
   {
     title: "RoleScout",
@@ -30,6 +33,7 @@ const projects: Project[] = [
     status: "Active",
     href: "https://www.getrolescout.com/",
     github: null,
+    favicon: "https://www.google.com/s2/favicons?domain=getrolescout.com&sz=64",
   },
 ];
 
@@ -46,10 +50,20 @@ export default function Lab() {
         {projects.map((project) => {
           const Card = (
             <div className="group h-full rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm">
-              <div className="flex items-start justify-between">
-                <h3 className="text-lg font-semibold">{project.title}</h3>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  {project.favicon && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={project.favicon}
+                      alt=""
+                      className="h-5 w-5 rounded shrink-0"
+                    />
+                  )}
+                  <h3 className="text-lg font-semibold">{project.title}</h3>
+                </div>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     project.status === "Active"
                       ? "bg-green-50 text-green-700"
                       : "bg-amber-50 text-amber-700"
