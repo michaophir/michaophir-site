@@ -23,6 +23,13 @@ const ACTIVE: Project[] = [
     href: "https://beachouse.ai",
   },
   {
+    title: "artcubbies.com",
+    description:
+      "Keep what they make — a private digital archive for your kid's artwork. Photograph, organize, and preserve creations without the paper pile on the counter.",
+    status: "Active",
+    href: "https://www.artcubbies.com/",
+  },
+  {
     title: "RoleScout",
     description:
       "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
