@@ -25,7 +25,7 @@ const ACTIVE: Project[] = [
       "Your home, in full view — quietly keeping an eye on your second home, whether you're there or not. Visibility into every visit, bill, and detail.",
     status: "Active",
     href: "https://beachouse.ai",
-    favicon: "https://www.google.com/s2/favicons?domain=beachouse.ai&sz=64",
+    favicon: "https://icons.duckduckgo.com/ip3/beachouse.ai.ico",
     accent: "aspen",
   },
   {
@@ -34,7 +34,7 @@ const ACTIVE: Project[] = [
       "Keep what they make — a private digital archive for your kid's artwork. Photograph, organize, and preserve creations without the paper pile on the counter.",
     status: "Active",
     href: "https://www.artcubbies.com/",
-    favicon: "https://www.google.com/s2/favicons?domain=artcubbies.com&sz=64",
+    favicon: "https://icons.duckduckgo.com/ip3/artcubbies.com.ico",
     accent: "lake",
   },
   {
@@ -43,7 +43,7 @@ const ACTIVE: Project[] = [
       "AI-powered job hunt OS — target companies, track applications, find signal in the noise.",
     status: "Active",
     href: "https://www.getrolescout.com/",
-    favicon: "https://www.google.com/s2/favicons?domain=getrolescout.com&sz=64",
+    favicon: "https://icons.duckduckgo.com/ip3/getrolescout.com.ico",
     accent: "sky",
   },
 ];

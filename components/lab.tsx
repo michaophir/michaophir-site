@@ -16,7 +16,7 @@ const projects: Project[] = [
     status: "Active",
     href: "https://beachouse.ai",
     github: null,
-    favicon: "https://www.google.com/s2/favicons?domain=beachouse.ai&sz=64",
+    favicon: "https://icons.duckduckgo.com/ip3/beachouse.ai.ico",
     accent: "aspen",
   },
   {
@@ -26,7 +26,7 @@ const projects: Project[] = [
     status: "Active",
     href: "https://www.artcubbies.com/",
     github: null,
-    favicon: "https://www.google.com/s2/favicons?domain=artcubbies.com&sz=64",
+    favicon: "https://icons.duckduckgo.com/ip3/artcubbies.com.ico",
     accent: "lake",
   },
   {
@@ -36,7 +36,7 @@ const projects: Project[] = [
     status: "Active",
     href: "https://www.getrolescout.com/",
     github: null,
-    favicon: "https://www.google.com/s2/favicons?domain=getrolescout.com&sz=64",
+    favicon: "https://icons.duckduckgo.com/ip3/getrolescout.com.ico",
     accent: "sky",
   },
 ];
